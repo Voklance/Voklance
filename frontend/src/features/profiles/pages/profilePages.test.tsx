@@ -1,0 +1,300 @@
+// @vitest-environment jsdom
+import type {
+  AuthUser,
+  CatalogItem,
+  ProfessionalProfile,
+  ProfessionalExperience,
+  Education
+} from '@voklance/shared';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { MemoryRouter, Route, Routes } from 'react-router';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { currentUserKey } from '@/features/auth/cache/authCache';
+import { onboardingApi } from '@/features/onboarding/api/onboardingApi';
+import { onboardingKeys } from '@/features/onboarding/hooks/useOnboarding';
+import ProfileSidebar from '@/components/shared/ProfileSidebar';
+import SideNavigation from '@/components/navigation/SideNavigation';
+import { profileApi } from '../api/profileApi';
+import { communityApi } from '@/features/communities/api/communityApi';
+import MyProfilePage from './MyProfilePage';
+import EditProfilePage from './EditProfilePage';
+import PublicProfilePage from './PublicProfilePage';
+
+vi.mock('../api/profileApi', () => ({
+  profileApi: {
+    own: vi.fn(),
+    save: vi.fn(),
+    skills: vi.fn(),
+    saveSkills: vi.fn(),
+    interests: vi.fn(),
+    experiences: vi.fn(),
+    educations: vi.fn(),
+    public: vi.fn()
+  }
+}));
+vi.mock('@/features/onboarding/api/onboardingApi', () => ({
+  onboardingApi: {
+    skills: vi.fn(),
+    addExperience: vi.fn(),
+    editExperience: vi.fn(),
+    removeExperience: vi.fn(),
+    addEducation: vi.fn(),
+    editEducation: vi.fn(),
+    removeEducation: vi.fn()
+  }
+}));
+vi.mock('@/features/communities/api/communityApi', () => ({ communityApi: { mine: vi.fn() } }));
+
+const user: AuthUser = {
+  id: 'a'.repeat(24),
+  name: 'Ada Developer',
+  email: 'ada@example.test',
+  accountStatus: 'ACTIVE',
+  onboardingStatus: 'COMPLETED',
+  emailVerifiedAt: null,
+  emailVerificationRequired: false
+};
+const profile: ProfessionalProfile = {
+  id: 'b'.repeat(24),
+  username: 'ada-dev',
+  fullName: 'Ada Developer',
+  headline: 'Software Engineer',
+  bio: 'I build useful software.',
+  country: 'India',
+  city: 'Pune',
+  githubUrl: 'https://github.com/ada-dev',
+  visibility: 'PUBLIC'
+};
+const typescript: CatalogItem = {
+  id: 'c'.repeat(24),
+  name: 'TypeScript',
+  slug: 'typescript',
+  category: 'Engineering'
+};
+const python: CatalogItem = { id: 'd'.repeat(24), name: 'Python', slug: 'python', category: 'Engineering' };
+let experiences: ProfessionalExperience[] = [];
+let education: Education[] = [];
+
+function renderPage(path: string, includeShell = false) {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, staleTime: Infinity }, mutations: { retry: false } }
+  });
+  client.setQueryData(currentUserKey, user);
+  client.setQueryData(onboardingKeys.profile, { profile });
+  client.setQueryData(onboardingKeys.selectedSkills, { skills: [typescript] });
+  client.setQueryData(onboardingKeys.selectedInterests, { interests: [] });
+  client.setQueryData(onboardingKeys.experiences, { experiences });
+  client.setQueryData(onboardingKeys.educations, { educations: education });
+  render(
+    <QueryClientProvider client={client}>
+      <MemoryRouter initialEntries={[path]}>
+        {includeShell && (
+          <>
+            <SideNavigation onSignOut={() => {}} signingOut={false} />
+            <ProfileSidebar user={user} />
+          </>
+        )}
+        <Routes>
+          <Route path="/app/profile" element={<MyProfilePage />} />
+          <Route path="/app/profile/edit" element={<EditProfilePage />} />
+          <Route path="/app/professionals/:username" element={<PublicProfilePage />} />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>
+  );
+  return client;
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.mocked(communityApi.mine).mockResolvedValue({ items: [], nextCursor: null, hasMore: false });
+  experiences = [];
+  education = [];
+  vi.mocked(profileApi.own).mockResolvedValue({ profile });
+  vi.mocked(profileApi.skills).mockResolvedValue({ skills: [typescript] });
+  vi.mocked(profileApi.interests).mockResolvedValue({ interests: [] });
+  vi.mocked(profileApi.experiences).mockImplementation(async () => ({ experiences: [...experiences] }));
+  vi.mocked(profileApi.educations).mockImplementation(async () => ({ educations: [...education] }));
+  vi.mocked(profileApi.save).mockResolvedValue({ profile });
+  vi.mocked(profileApi.saveSkills).mockResolvedValue({ skills: [typescript, python] });
+  vi.mocked(profileApi.public).mockResolvedValue({
+    profile,
+    skills: [typescript],
+    experiences: [],
+    education: []
+  });
+  vi.mocked(onboardingApi.skills).mockResolvedValue({
+    items: [typescript, python],
+    page: 1,
+    limit: 50,
+    total: 2
+  });
+  vi.mocked(onboardingApi.addExperience).mockImplementation(async (input) => {
+    const item: ProfessionalExperience = {
+      id: 'e'.repeat(24),
+      jobTitle: input.jobTitle,
+      companyName: input.companyName,
+      startDate: input.startDate,
+      isCurrent: input.isCurrent
+    };
+    experiences = [item];
+    return { experience: item };
+  });
+  vi.mocked(onboardingApi.editExperience).mockImplementation(async (_id, input) => {
+    experiences = experiences.map((item) => ({ ...item, ...input }) as ProfessionalExperience);
+    return { experience: experiences[0] };
+  });
+  vi.mocked(onboardingApi.removeExperience).mockImplementation(async () => {
+    experiences = [];
+    return { data: { success: true, data: {}, message: '' } } as never;
+  });
+  vi.mocked(onboardingApi.addEducation).mockImplementation(async (input) => {
+    const item: Education = {
+      id: 'f'.repeat(24),
+      institution: input.institution,
+      startDate: input.startDate
+    };
+    education = [item];
+    return { education: item };
+  });
+  vi.mocked(onboardingApi.editEducation).mockImplementation(async (_id, input) => {
+    education = education.map((item) => ({ ...item, ...input }) as Education);
+    return { education: education[0] };
+  });
+  vi.mocked(onboardingApi.removeEducation).mockImplementation(async () => {
+    education = [];
+    return { data: { success: true, data: {}, message: '' } } as never;
+  });
+});
+afterEach(cleanup);
+
+describe('professional profile screens', () => {
+  it('renders saved owner details and real sidebar navigation', () => {
+    renderPage('/app/profile', true);
+    expect(screen.getByRole('heading', { name: 'Ada Developer', level: 1 })).toBeTruthy();
+    expect(screen.getByText('I build useful software.')).toBeTruthy();
+    expect(screen.getAllByText('TypeScript').length).toBeGreaterThan(0);
+    expect(screen.getByRole('link', { name: 'GitHub' })).toHaveProperty('rel', 'noopener noreferrer');
+    expect(screen.getByRole('link', { name: 'Profile' }).getAttribute('aria-current')).toBe('page');
+    expect(screen.getByRole('link', { name: 'View profile' })).toBeTruthy();
+  });
+
+  it('prefills the edit form and validates unsafe links', async () => {
+    renderPage('/app/profile/edit');
+    expect(await screen.findByDisplayValue('Software Engineer')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Website URL'), { target: { value: 'javascript:alert(1)' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save profile' }));
+    expect(screen.getByText('Enter a secure HTTPS URL.')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Website URL'), { target: { value: '' } });
+    fireEvent.change(screen.getByLabelText('GitHub profile URL'), { target: { value: 'not-a-url' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save profile' }));
+    expect(screen.getByLabelText('GitHub profile URL').getAttribute('aria-invalid')).toBe('true');
+    expect(profileApi.save).not.toHaveBeenCalled();
+  });
+
+  it('saves an edited profile and returns to the profile page', async () => {
+    renderPage('/app/profile/edit');
+    await screen.findByDisplayValue('Software Engineer');
+    fireEvent.change(screen.getByLabelText(/Professional headline/), {
+      target: { value: 'Principal Engineer' }
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save profile' }));
+    await waitFor(() =>
+      expect(profileApi.save).toHaveBeenCalledWith(
+        expect.objectContaining({ headline: 'Principal Engineer', visibility: 'PUBLIC' }),
+        expect.anything()
+      )
+    );
+    expect(await screen.findByText('Profile saved.')).toBeTruthy();
+  });
+
+  it('shows server username conflicts without discarding the draft', async () => {
+    vi.mocked(profileApi.save).mockRejectedValue({
+      response: { data: { error: { code: 'USERNAME_TAKEN', message: 'Taken' } } }
+    });
+    renderPage('/app/profile/edit');
+    await screen.findByDisplayValue('ada-dev');
+    fireEvent.click(screen.getByRole('button', { name: 'Save profile' }));
+    expect(await screen.findByText('This username is already in use.')).toBeTruthy();
+    expect(screen.getByDisplayValue('ada-dev')).toBeTruthy();
+  });
+
+  it('adds a skill through the reused catalog selector', async () => {
+    renderPage('/app/profile/edit');
+    await screen.findByDisplayValue('ada-dev');
+    fireEvent.click(await screen.findByRole('checkbox', { name: /Python/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save skills' }));
+    await waitFor(() =>
+      expect(profileApi.saveSkills).toHaveBeenCalledWith(
+        { skillIds: [typescript.id, python.id] },
+        expect.anything()
+      )
+    );
+    expect(await screen.findByText('Skills saved.')).toBeTruthy();
+  });
+
+  it('supports experience and education creation through existing APIs', async () => {
+    renderPage('/app/profile/edit');
+    await screen.findByDisplayValue('ada-dev');
+    fireEvent.change(screen.getByLabelText('Job title'), { target: { value: 'Engineer' } });
+    fireEvent.change(screen.getByLabelText('Organization'), { target: { value: 'Example' } });
+    fireEvent.change(screen.getByLabelText('Experience start date'), { target: { value: '2024-01-01' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add experience' }));
+    await waitFor(() => expect(onboardingApi.addExperience).toHaveBeenCalled());
+    fireEvent.change(screen.getByLabelText('Institution'), { target: { value: 'University' } });
+    fireEvent.change(screen.getByLabelText('Education start date'), { target: { value: '2020-01-01' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add education' }));
+    await waitFor(() => expect(onboardingApi.addEducation).toHaveBeenCalled());
+  });
+
+  it('edits experience and requires confirmation before removal', async () => {
+    experiences = [
+      {
+        id: 'e'.repeat(24),
+        jobTitle: 'Engineer',
+        companyName: 'Example',
+        startDate: '2024-01-01',
+        isCurrent: true
+      }
+    ];
+    renderPage('/app/profile/edit');
+    await screen.findByDisplayValue('ada-dev');
+    const section = screen.getByRole('region', { name: 'Professional experience' });
+    fireEvent.click(within(section).getByRole('button', { name: 'Edit' }));
+    fireEvent.change(screen.getByLabelText('Job title'), { target: { value: 'Senior Engineer' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save experience' }));
+    await waitFor(() => expect(onboardingApi.editExperience).toHaveBeenCalled());
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    fireEvent.click(within(section).getByRole('button', { name: 'Remove Senior Engineer' }));
+    expect(onboardingApi.removeExperience).not.toHaveBeenCalled();
+    confirm.mockReturnValue(true);
+    fireEvent.click(within(section).getByRole('button', { name: 'Remove Senior Engineer' }));
+    await waitFor(() => expect(onboardingApi.removeExperience).toHaveBeenCalled());
+    confirm.mockRestore();
+  });
+
+  it('edits education and requires confirmation before removal', async () => {
+    education = [{ id: 'f'.repeat(24), institution: 'University', startDate: '2020-01-01' }];
+    renderPage('/app/profile/edit');
+    await screen.findByDisplayValue('ada-dev');
+    const section = screen.getByRole('region', { name: 'Education' });
+    fireEvent.click(within(section).getByRole('button', { name: 'Edit' }));
+    fireEvent.change(screen.getByLabelText('Institution'), { target: { value: 'New University' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save education' }));
+    await waitFor(() => expect(onboardingApi.editEducation).toHaveBeenCalled());
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    fireEvent.click(within(section).getByRole('button', { name: 'Remove New University' }));
+    await waitFor(() => expect(onboardingApi.removeEducation).toHaveBeenCalled());
+    confirm.mockRestore();
+  });
+
+  it('renders a public profile and handles missing profiles', async () => {
+    renderPage('/app/professionals/ada-dev');
+    expect(await screen.findByRole('heading', { name: 'Ada Developer' })).toBeTruthy();
+    cleanup();
+    vi.mocked(profileApi.public).mockRejectedValue({ isAxiosError: true, response: { status: 404 } });
+    renderPage('/app/professionals/missing-user');
+    expect(await screen.findByText('This professional profile is unavailable.')).toBeTruthy();
+  });
+});

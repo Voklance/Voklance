@@ -1,0 +1,10 @@
+node_modules/
+**/dist/
+.agents/
+.hallmark/
+**/coverage/
+package-lock.json
+**/.env
+**/.env.*
+!**/.env.example
+**/assets/*.png
