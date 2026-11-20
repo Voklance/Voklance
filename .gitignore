@@ -6,3 +6,12 @@ dist/
 .DS_Store
 *.log
 .hallmark/
+# Keep local database exports and private key material out of public commits.
+dump/
+*.bson
+*.bson.gz
+*.archive
+*.pem
+*.key
+*.p12
+*.pfx

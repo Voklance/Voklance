@@ -2,6 +2,22 @@
 
 This guide starts with a fresh clone. Run commands from the repository root unless a step says otherwise. Each developer can use a separate local MongoDB database, or the team can connect to one approved shared MongoDB deployment. GitHub stores the code; it does not copy MongoDB data between computers.
 
+## Public repository and private credentials
+
+This repository is public, so anyone can read its files and Git history. Commit only example values in `backend/.env.example` and `frontend/.env.example`. Put real MongoDB connection strings, SMTP passwords, and GitHub OAuth secrets in each developer's ignored `backend/.env`. Give your colleague those values outside GitHub, then have them create their own local `.env` file from the example. A local MongoDB setup needs no shared secret; a shared database should use a separate development database and a developer account with only the access it needs. Do not give a production database password for local testing.
+
+Never put a secret in a `VITE_` variable or frontend source file: [Vite includes those values in browser code](https://vite.dev/guide/env-and-mode). Do not paste secrets into GitHub issues, pull requests, Actions logs, screenshots, or database exports committed to the repo. The `.gitignore` covers local `.env` files, common database backups, and private-key file types, but it cannot protect a secret typed into another tracked file or a commit made with `git add -f`.
+
+Before pushing, check that private environment files are ignored and not tracked:
+
+```sh
+git check-ignore backend/.env frontend/.env
+git ls-files backend/.env frontend/.env
+git diff --cached --name-only
+```
+
+The first command should list the two `.env` paths if they exist; the second should print nothing. Review the staged file list from the third command. GitHub's [secret scanning and push protection](https://docs.github.com/en/code-security/concepts/secret-security/push-protection) add another check, but they do not replace reviewing what is committed. If a real secret is ever committed, revoke or rotate it; deleting the file in a later commit does not remove it from Git history.
+
 ## Versions and downloads
 
 | Tool                      | Version for this project                                  | Purpose                                     |
