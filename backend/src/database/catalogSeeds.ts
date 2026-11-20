@@ -15,7 +15,222 @@ export const skillSeeds: CatalogSeed[] = [
   { name: 'Artificial Intelligence', slug: 'artificial-intelligence', category: 'AI' },
   { name: 'Machine Learning', slug: 'machine-learning', category: 'AI' },
   { name: 'DevOps', slug: 'devops', category: 'Infrastructure' },
-  { name: 'AWS', slug: 'aws', category: 'Cloud' }
+  { name: 'AWS', slug: 'aws', category: 'Cloud' },
+  ...Object.entries({
+    Programming: [
+      'Java',
+      'C',
+      'C++',
+      'C#',
+      'Go',
+      'Rust',
+      'Ruby',
+      'PHP',
+      'Kotlin',
+      'Swift',
+      'Dart',
+      'Scala',
+      'R',
+      'Bash',
+      'PowerShell',
+      'SQL',
+      'HTML',
+      'CSS',
+      'Sass'
+    ],
+    Frontend: [
+      'Angular',
+      'Vue.js',
+      'Next.js',
+      'Svelte',
+      'React Native',
+      'Tailwind CSS',
+      'Bootstrap',
+      'Redux',
+      'Web Accessibility',
+      'Web Performance'
+    ],
+    Backend: [
+      'NestJS',
+      'Django',
+      'Flask',
+      'FastAPI',
+      'Spring Boot',
+      'Laravel',
+      'Ruby on Rails',
+      'GraphQL',
+      'REST API Design',
+      'Microservices',
+      'API Development'
+    ],
+    Database: [
+      'PostgreSQL',
+      'MySQL',
+      'Redis',
+      'SQLite',
+      'Microsoft SQL Server',
+      'Oracle Database',
+      'Elasticsearch',
+      'DynamoDB',
+      'Firebase'
+    ],
+    Cloud: ['Microsoft Azure', 'Google Cloud Platform', 'Cloud Architecture', 'Serverless Computing'],
+    Infrastructure: [
+      'Docker',
+      'Kubernetes',
+      'Terraform',
+      'CI/CD',
+      'Git',
+      'GitHub Actions',
+      'Linux',
+      'System Administration',
+      'Site Reliability Engineering',
+      'Infrastructure as Code',
+      'Ansible',
+      'Jenkins'
+    ],
+    Data: [
+      'Data Analysis',
+      'Data Science',
+      'Data Engineering',
+      'Data Visualization',
+      'Power BI',
+      'Tableau',
+      'Microsoft Excel',
+      'Pandas',
+      'NumPy',
+      'Apache Spark',
+      'ETL',
+      'Business Intelligence'
+    ],
+    AI: [
+      'Deep Learning',
+      'Natural Language Processing',
+      'Computer Vision',
+      'Generative AI',
+      'Prompt Engineering',
+      'PyTorch',
+      'TensorFlow',
+      'MLOps',
+      'Large Language Models'
+    ],
+    Cybersecurity: [
+      'Network Security',
+      'Application Security',
+      'Penetration Testing',
+      'Threat Modeling',
+      'Incident Response',
+      'Identity and Access Management',
+      'Security Auditing'
+    ],
+    Design: [
+      'UI Design',
+      'UX Design',
+      'Figma',
+      'User Research',
+      'Prototyping',
+      'Design Systems',
+      'Graphic Design',
+      'Adobe Photoshop',
+      'Adobe Illustrator',
+      'Motion Design'
+    ],
+    Product: [
+      'Product Management',
+      'Product Roadmapping',
+      'Agile',
+      'Scrum',
+      'User Stories',
+      'Market Research',
+      'A/B Testing',
+      'Stakeholder Management'
+    ],
+    Business: [
+      'Business Development',
+      'Strategic Planning',
+      'Project Management',
+      'Operations Management',
+      'Process Improvement',
+      'Vendor Management',
+      'Negotiation',
+      'Entrepreneurship'
+    ],
+    Marketing: [
+      'Digital Marketing',
+      'SEO',
+      'SEM',
+      'Content Marketing',
+      'Social Media Marketing',
+      'Email Marketing',
+      'Brand Strategy',
+      'Copywriting',
+      'Marketing Analytics'
+    ],
+    Sales: [
+      'Sales',
+      'Account Management',
+      'CRM',
+      'Salesforce',
+      'Lead Generation',
+      'Customer Success',
+      'Customer Support'
+    ],
+    Finance: [
+      'Financial Analysis',
+      'Financial Modeling',
+      'Accounting',
+      'Bookkeeping',
+      'Budgeting',
+      'Forecasting',
+      'Taxation',
+      'Risk Management',
+      'Investment Analysis'
+    ],
+    'Human Resources': [
+      'Recruiting',
+      'Talent Acquisition',
+      'Employee Relations',
+      'Learning and Development',
+      'Performance Management',
+      'Payroll',
+      'HR Analytics'
+    ],
+    Professional: [
+      'Public Speaking',
+      'Technical Writing',
+      'Presentation Design',
+      'Leadership',
+      'Team Management',
+      'Collaboration',
+      'Problem Solving',
+      'Critical Thinking',
+      'Time Management'
+    ],
+    Engineering: [
+      'AutoCAD',
+      'MATLAB',
+      'Mechanical Design',
+      'Electrical Engineering',
+      'Civil Engineering',
+      'Quality Assurance',
+      'Test Automation',
+      'Selenium',
+      'Cypress',
+      'Playwright',
+      'Mobile App Development'
+    ]
+  }).flatMap(([category, names]) =>
+    names.map((name) => ({
+      name,
+      slug: name
+        .replace(/C\+\+/g, 'C Plus Plus')
+        .replace(/C#/g, 'C Sharp')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, ''),
+      category
+    }))
+  )
 ];
 
 export const interestSeeds: CatalogSeed[] = [

@@ -165,6 +165,8 @@ export interface ProfessionalProfile {
   id: string;
   username: string;
   fullName: string;
+  firstName?: string;
+  lastName?: string;
   headline: string;
   country: string;
   city?: string;
@@ -235,6 +237,12 @@ export interface OnboardingSnapshot {
 
 export interface ProfileResponseData {
   profile: ProfessionalProfile | null;
+}
+
+export interface OnboardingIdentityRequest {
+  firstName: string;
+  lastName: string;
+  headline?: string;
 }
 
 export type ProfilePatchRequest = Partial<

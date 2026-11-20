@@ -127,10 +127,37 @@ describe('skills API', () => {
   it('lists a bounded, searchable catalog', async () => {
     const response = await first.get('/api/v1/skills?search=react&limit=2');
     expect(response.status).toBe(200);
-    expect(response.body.data).toMatchObject({ page: 1, limit: 2, total: 1 });
-    expect(response.body.data.items[0].slug).toBe('react-js');
+    expect(response.body.data).toMatchObject({ page: 1, limit: 2, total: 2 });
+    expect(response.body.data.items.map((item: { slug: string }) => item.slug)).toEqual([
+      'react-native',
+      'react-js'
+    ]);
     expect((await first.get('/api/v1/skills?limit=1000')).status).toBe(400);
     expect((await first.get('/api/v1/skills?category=Cloud')).body.data.items[0].slug).toBe('aws');
+    expect((await first.get('/api/v1/skills?search=cybersecurity')).body.data.items.length).toBeGreaterThan(
+      0
+    );
+  });
+
+  it('adds a missing skill once and makes it searchable and selectable', async () => {
+    const path = '/api/v1/skills';
+    expect((await request(app).post(path).send({ name: 'C++' })).status).toBe(401);
+    expect((await first.post(path).send({ name: '' })).status).toBe(400);
+    expect((await first.post(path).send({ name: '!!!' })).status).toBe(400);
+    expect((await first.post(path).send({ name: 'New Skill', category: 'Other' })).status).toBe(400);
+
+    const created = await first.post(path).send({ name: '  Quantum  Robotics  ' });
+    expect(created.status).toBe(200);
+    expect(created.body.data.skill).toMatchObject({ name: 'Quantum Robotics', category: 'Community' });
+    const repeated = await second.post(path).send({ name: 'quantum robotics' });
+    expect(repeated.status).toBe(200);
+    expect(repeated.body.data.skill.id).toBe(created.body.data.skill.id);
+    expect((await first.get(`${path}?search=robotics`)).body.data.items).toEqual([created.body.data.skill]);
+    const selected = await first.put('/api/v1/users/me/skills').send({
+      skillIds: [created.body.data.skill.id]
+    });
+    expect(selected.status).toBe(200);
+    expect(selected.body.data.skills).toContainEqual(created.body.data.skill);
   });
 
   it('replaces skill selections idempotently and validates references', async () => {
@@ -306,6 +333,35 @@ describe('onboarding API', () => {
       400
     );
     expect((await second.post('/api/v1/onboarding/complete')).body.error.code).toBe('ONBOARDING_INCOMPLETE');
+  });
+
+  it('requires first and last name and saves an optional professional headline', async () => {
+    const path = '/api/v1/onboarding/profile';
+    expect((await request(app).patch(path).send({ firstName: 'Sam', lastName: 'User' })).status).toBe(401);
+    expect((await second.patch(path).send({ firstName: 'Sam' })).status).toBe(400);
+    expect((await second.patch(path).send({ firstName: 'Sam', lastName: '' })).status).toBe(400);
+    expect(
+      (await second.patch(path).send({ firstName: 'Sam', lastName: 'User', country: 'India' })).status
+    ).toBe(400);
+
+    const saved = await second.patch(path).send({ firstName: 'Sam', lastName: 'User' });
+    expect(saved.status).toBe(200);
+    expect(saved.body.data.profile).toMatchObject({
+      firstName: 'Sam',
+      lastName: 'User',
+      fullName: 'Sam User',
+      headline: ''
+    });
+    expect((await second.get('/api/v1/onboarding')).body.data.onboarding.completedSteps).toContain(1);
+
+    const updated = await second.patch(path).send({
+      firstName: 'Sam',
+      lastName: 'User',
+      headline: 'Product designer'
+    });
+    expect(updated.status).toBe(200);
+    expect(updated.body.data.profile.headline).toBe('Product designer');
+    expect((await second.get('/api/v1/auth/me')).body.data.user.name).toBe('Sam User');
   });
 
   it('derives completion from persisted data and completes only the current user once', async () => {

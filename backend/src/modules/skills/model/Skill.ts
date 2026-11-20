@@ -8,7 +8,7 @@ export interface SkillRecord {
 
 const skillSchema = new Schema<SkillRecord>(
   {
-    name: { type: String, required: true, trim: true, minlength: 2, maxlength: 80 },
+    name: { type: String, required: true, trim: true, minlength: 1, maxlength: 80 },
     slug: {
       type: String,
       required: true,

@@ -2,6 +2,7 @@ import { useState, useEffect, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { apiErrorMessage } from '@/lib/apiClient';
+import { useFlash } from '@/components/shared/FlashMessages';
 import { clearAuthenticatedCache } from '@/features/auth/cache/authCache';
 import { settingsApi } from '../api/settingsApi';
 import { useAccountInfo, useSettingsActions } from '../hooks/useSettings';
@@ -10,6 +11,7 @@ export default function AccountSettingsPage() {
   const actions = useSettingsActions();
   const client = useQueryClient();
   const navigate = useNavigate();
+  const { showFlash } = useFlash();
   const [name, setName] = useState('');
   const [newEmail, setNewEmail] = useState('');
   const [emailPassword, setEmailPassword] = useState('');
@@ -25,8 +27,10 @@ export default function AccountSettingsPage() {
     try {
       await actions.updateAccount.mutateAsync(name.trim());
       setMessage('Name updated.');
+      showFlash({ type: 'success', message: 'Your display name has been updated.' });
     } catch (error) {
       setMessage(apiErrorMessage(error));
+      showFlash({ type: 'error', message: apiErrorMessage(error) });
     }
   }
   async function changeEmail(event: FormEvent) {
@@ -37,8 +41,10 @@ export default function AccountSettingsPage() {
       await settingsApi.requestEmailChange(emailPassword, newEmail.trim());
       setEmailPassword('');
       setMessage('Check your new email for a confirmation link.');
+      showFlash({ type: 'info', message: 'Check your new email for a confirmation link.' });
     } catch (error) {
       setMessage(apiErrorMessage(error));
+      showFlash({ type: 'error', message: apiErrorMessage(error) });
     } finally {
       setBusy(false);
     }
@@ -54,6 +60,7 @@ export default function AccountSettingsPage() {
       navigate('/login', { replace: true });
     } catch (error) {
       setMessage(apiErrorMessage(error));
+      showFlash({ type: 'error', message: apiErrorMessage(error) });
       setBusy(false);
     }
   }

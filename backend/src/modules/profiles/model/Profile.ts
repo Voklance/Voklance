@@ -12,6 +12,8 @@ export interface ProfileRecord {
   userId: Types.ObjectId;
   username: string;
   fullName: string;
+  firstName?: string;
+  lastName?: string;
   headline: string;
   bio?: string;
   avatarUrl?: string;
@@ -52,7 +54,9 @@ const profileSchema = new Schema<ProfileRecord>(
       match: USERNAME_PATTERN
     },
     fullName: { type: String, required: true, trim: true, minlength: 2, maxlength: 80 },
-    headline: { type: String, required: true, trim: true, minlength: 2, maxlength: 120 },
+    firstName: { type: String, trim: true, maxlength: 80 },
+    lastName: { type: String, trim: true, maxlength: 80 },
+    headline: { type: String, trim: true, maxlength: 120, default: '' },
     bio: { type: String, trim: true, maxlength: 500 },
     avatarUrl: {
       type: String,
@@ -64,7 +68,7 @@ const profileSchema = new Schema<ProfileRecord>(
       }
     },
     city: { type: String, trim: true, maxlength: 100 },
-    country: { type: String, required: true, trim: true, minlength: 2, maxlength: 100 },
+    country: { type: String, trim: true, maxlength: 100, default: '' },
     professionalStatus: { type: String, enum: [...PROFESSIONAL_STATUSES] },
     githubUrl: {
       type: String,

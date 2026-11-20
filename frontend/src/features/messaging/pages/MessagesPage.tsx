@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router';
 import { useCurrentUser } from '@/features/auth/hooks/useCurrentUser';
 import { apiErrorMessage } from '@/lib/apiClient';
+import { useFlash } from '@/components/shared/FlashMessages';
 import { messagingSocket, setActiveConversation } from '@/lib/socketClient';
 import MessageComposer from '../components/MessageComposer';
 import MessageHistory from '../components/MessageHistory';
@@ -121,6 +122,7 @@ export default function MessagesPage() {
   const navigate = useNavigate();
   const client = useQueryClient();
   const account = useCurrentUser();
+  const { showFlash } = useFlash();
   const [searchDraft, setSearchDraft] = useState('');
   const [search, setSearch] = useState('');
   const [showSettings, setShowSettings] = useState(false);
@@ -219,15 +221,17 @@ export default function MessagesPage() {
         appendMessageToCache(client, message);
         setPending((items) => items.filter((current) => current.clientMessageId !== item.clientMessageId));
         void client.invalidateQueries({ queryKey: ['messages', 'conversations'] });
+        showFlash({ type: 'success', message: 'Your message has been sent successfully.' });
       } catch {
         setPending((items) =>
           items.map((current) =>
             current.clientMessageId === item.clientMessageId ? { ...current, state: 'failed' } : current
           )
         );
+        showFlash({ type: 'error', message: 'Message not sent. You can retry it in the conversation.' });
       }
     },
-    [client, conversationId]
+    [client, conversationId, showFlash]
   );
   const send = (body: string) => {
     const item: PendingMessage = { clientMessageId: crypto.randomUUID(), body, state: 'pending' };

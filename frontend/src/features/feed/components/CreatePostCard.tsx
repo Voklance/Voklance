@@ -1,12 +1,14 @@
 import { POST_CONTENT_LIMIT } from '@voklance/shared';
 import { useState, type FormEvent } from 'react';
 import { apiErrorMessage } from '@/lib/apiClient';
+import { useFlash } from '@/components/shared/FlashMessages';
 import { useFeedActions } from '../hooks/useFeed';
 
 export default function CreatePostCard() {
   const [open, setOpen] = useState(false);
   const [content, setContent] = useState('');
   const actions = useFeedActions();
+  const { showFlash } = useFlash();
   async function publish(event: FormEvent) {
     event.preventDefault();
     if (!content.trim() || content.length > POST_CONTENT_LIMIT || actions.create.isPending) return;
@@ -14,7 +16,9 @@ export default function CreatePostCard() {
       await actions.create.mutateAsync(content.trim());
       setContent('');
       setOpen(false);
-    } catch {
+      showFlash({ type: 'success', message: 'Your post has been published.' });
+    } catch (error) {
+      showFlash({ type: 'error', message: apiErrorMessage(error) });
       /* The draft remains so the user can retry. */
     }
   }

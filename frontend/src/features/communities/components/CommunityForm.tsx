@@ -1,5 +1,6 @@
 import { COMMUNITY_CATEGORIES, COMMUNITY_CATEGORY_LABELS, type CommunityInput } from '@voklance/shared';
 import { useState, type FormEvent } from 'react';
+import { useFlash } from '@/components/shared/FlashMessages';
 
 const blank: CommunityInput = {
   name: '',
@@ -25,6 +26,7 @@ export default function CommunityForm({
   const [form, setForm] = useState(initial);
   const [tags, setTags] = useState(initial.tags.join(', '));
   const [error, setError] = useState('');
+  const { showFlash } = useFlash();
   const save = (event: FormEvent) => {
     event.preventDefault();
     const parsedTags = tags
@@ -33,6 +35,7 @@ export default function CommunityForm({
       .filter(Boolean);
     if (form.name.trim().length < 3 || form.description.trim().length < 10) {
       setError('Add a name of at least 3 characters and a description of at least 10 characters.');
+      showFlash({ type: 'warning', message: 'Please complete the required community fields.' });
       return;
     }
     if (
@@ -41,6 +44,7 @@ export default function CommunityForm({
       parsedTags.some((tag) => !/^[a-z0-9][a-z0-9 -]{0,29}$/.test(tag))
     ) {
       setError('Use up to 8 unique topics, separated by commas.');
+      showFlash({ type: 'warning', message: 'Please check the community topics.' });
       return;
     }
     setError('');
@@ -53,7 +57,7 @@ export default function CommunityForm({
     });
   };
   return (
-    <form className="community-form" onSubmit={save}>
+    <form className="community-form" onSubmit={save} noValidate>
       <label>
         Community name
         <input

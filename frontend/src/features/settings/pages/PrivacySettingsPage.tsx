@@ -1,11 +1,13 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
 import { apiErrorMessage } from '@/lib/apiClient';
+import { useFlash } from '@/components/shared/FlashMessages';
 import { usePrivacySettings, useSettingsActions } from '../hooks/useSettings';
 import type { PrivacySettings } from '../api/settingsApi';
 export default function PrivacySettingsPage() {
   const query = usePrivacySettings();
   const actions = useSettingsActions();
+  const { showFlash } = useFlash();
   const [draft, setDraft] = useState<PrivacySettings | null>(null);
   const [message, setMessage] = useState('');
   useEffect(() => {
@@ -18,8 +20,10 @@ export default function PrivacySettingsPage() {
     try {
       await actions.updatePrivacy.mutateAsync(draft);
       setMessage('Privacy settings saved.');
+      showFlash({ type: 'success', message: 'Your privacy settings have been saved.' });
     } catch (error) {
       setMessage(apiErrorMessage(error));
+      showFlash({ type: 'error', message: apiErrorMessage(error) });
     }
   }
   const toggle = (key: keyof PrivacySettings, value: boolean) =>

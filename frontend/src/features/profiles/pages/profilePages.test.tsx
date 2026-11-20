@@ -40,6 +40,7 @@ vi.mock('../api/profileApi', () => ({
 vi.mock('@/features/onboarding/api/onboardingApi', () => ({
   onboardingApi: {
     skills: vi.fn(),
+    createSkill: vi.fn(),
     addExperience: vi.fn(),
     editExperience: vi.fn(),
     removeExperience: vi.fn(),
@@ -315,15 +316,33 @@ describe('professional profile screens', () => {
   it('supports experience and education creation through existing APIs', async () => {
     renderPage('/app/profile/edit');
     await screen.findByDisplayValue('ada-dev');
+    const experienceSection = screen.getByRole('region', { name: 'Professional Experience' });
+    const educationSection = screen.getByRole('region', { name: 'Education' });
+    expect(
+      experienceSection.compareDocumentPosition(educationSection) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Job title'), { target: { value: 'Engineer' } });
     fireEvent.change(screen.getByLabelText('Organization'), { target: { value: 'Example' } });
     fireEvent.change(screen.getByLabelText('Experience start date'), { target: { value: '2024-01-01' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Add experience' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Submit experience' }));
     await waitFor(() => expect(onboardingApi.addExperience).toHaveBeenCalled());
+    expect(await screen.findByRole('button', { name: 'Add Experience' })).toBeTruthy();
+    expect(screen.queryByLabelText('Job title')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Add Experience' }));
+    expect(screen.getByLabelText('Job title')).toBeTruthy();
+    fireEvent.click(
+      within(screen.getByRole('region', { name: 'Professional Experience' })).getByRole('button', {
+        name: 'Cancel'
+      })
+    );
     fireEvent.change(screen.getByLabelText('Institution'), { target: { value: 'University' } });
     fireEvent.change(screen.getByLabelText('Education start date'), { target: { value: '2020-01-01' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Add education' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Submit education' }));
     await waitFor(() => expect(onboardingApi.addEducation).toHaveBeenCalled());
+    expect(await screen.findByRole('button', { name: 'Add Education' })).toBeTruthy();
+    expect(screen.queryByLabelText('Institution')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Add Education' }));
+    expect(screen.getByLabelText('Institution')).toBeTruthy();
   });
 
   it('edits experience and requires confirmation before removal', async () => {
@@ -338,8 +357,9 @@ describe('professional profile screens', () => {
     ];
     renderPage('/app/profile/edit');
     await screen.findByDisplayValue('ada-dev');
-    const section = screen.getByRole('region', { name: 'Professional experience' });
-    fireEvent.click(within(section).getByRole('button', { name: 'Edit' }));
+    const section = screen.getByRole('region', { name: 'Professional Experience' });
+    expect(within(section).getByText('Jan 2024 – Present')).toBeTruthy();
+    fireEvent.click(within(section).getByRole('button', { name: 'Edit Engineer' }));
     fireEvent.change(screen.getByLabelText('Job title'), { target: { value: 'Senior Engineer' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save experience' }));
     await waitFor(() => expect(onboardingApi.editExperience).toHaveBeenCalled());
@@ -357,7 +377,8 @@ describe('professional profile screens', () => {
     renderPage('/app/profile/edit');
     await screen.findByDisplayValue('ada-dev');
     const section = screen.getByRole('region', { name: 'Education' });
-    fireEvent.click(within(section).getByRole('button', { name: 'Edit' }));
+    expect(within(section).getByText('Jan 2020')).toBeTruthy();
+    fireEvent.click(within(section).getByRole('button', { name: 'Edit University' }));
     fireEvent.change(screen.getByLabelText('Institution'), { target: { value: 'New University' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save education' }));
     await waitFor(() => expect(onboardingApi.editEducation).toHaveBeenCalled());

@@ -1,123 +1,79 @@
-import { useEffect, useState } from 'react';
-import { USERNAME_PATTERN } from '@voklance/shared';
-import { onboardingApi } from '../api/onboardingApi';
-import type { ProfileDraft } from '../validation/onboardingSchemas';
+import { useState } from 'react';
+import { onboardingIdentitySchema, type IdentityDraft } from '../validation/onboardingSchemas';
 
 type Props = {
-  value: ProfileDraft;
-  onChange: (value: ProfileDraft) => void;
+  value: IdentityDraft;
+  onChange: (value: IdentityDraft, field: keyof IdentityDraft) => void;
   errors: Record<string, string>;
-  onAvailability: (available: boolean | null) => void;
 };
 
-export default function ProfileStep({ value, onChange, errors, onAvailability }: Props) {
-  const [availability, setAvailability] = useState<'idle' | 'checking' | 'available' | 'taken' | 'error'>(
-    'idle'
-  );
-  useEffect(() => {
-    const username = value.username.trim().toLowerCase();
-    if (!USERNAME_PATTERN.test(username)) {
-      onAvailability(null);
-      return;
+export default function ProfileStep({ value, onChange, errors }: Props) {
+  const [touched, setTouched] = useState<Partial<Record<keyof IdentityDraft, boolean>>>({});
+  const fields: {
+    key: keyof IdentityDraft;
+    label: string;
+    placeholder: string;
+    required: boolean;
+    max: number;
+  }[] = [
+    { key: 'firstName', label: 'First name', placeholder: 'Enter your first name', required: true, max: 80 },
+    { key: 'lastName', label: 'Last name', placeholder: 'Enter your last name', required: true, max: 80 },
+    {
+      key: 'headline',
+      label: 'Professional headline',
+      placeholder: 'What do you do?',
+      required: false,
+      max: 120
     }
-    const controller = new AbortController();
-    setAvailability('checking');
-    onAvailability(null);
-    const timer = window.setTimeout(() => {
-      onboardingApi
-        .username(username, controller.signal)
-        .then((result) => {
-          setAvailability(result.available ? 'available' : 'taken');
-          onAvailability(result.available);
-        })
-        .catch(() => {
-          if (!controller.signal.aborted) {
-            setAvailability('error');
-            onAvailability(null);
-          }
-        });
-    }, 350);
-    return () => {
-      window.clearTimeout(timer);
-      controller.abort();
-    };
-  }, [value.username, onAvailability]);
-
-  function update(field: keyof ProfileDraft, next: string) {
-    onChange({ ...value, [field]: next });
-  }
-  const fields: { key: keyof ProfileDraft; label: string; required?: boolean; max: number }[] = [
-    { key: 'fullName', label: 'Full name', required: true, max: 80 },
-    { key: 'username', label: 'Username', required: true, max: 30 },
-    { key: 'headline', label: 'Professional headline', required: true, max: 120 },
-    { key: 'country', label: 'Country', required: true, max: 100 },
-    { key: 'city', label: 'City', max: 100 }
   ];
+
   return (
     <div className="onboarding-form-grid">
-      {fields.map(({ key, label, required, max }) => (
-        <div className="onboarding-field" key={key}>
-          <label htmlFor={`profile-${key}`}>
-            {label}
-            {!required && <span>Optional</span>}
-          </label>
-          <input
-            id={`profile-${key}`}
-            value={value[key]}
-            maxLength={max}
-            required={required}
-            aria-invalid={!!errors[key] || (key === 'username' && availability === 'taken')}
-            aria-describedby={`profile-${key}-help`}
-            onChange={(event) => update(key, event.target.value)}
-          />
-          <p
-            id={`profile-${key}-help`}
-            className={
-              errors[key] || (key === 'username' && availability === 'taken')
-                ? 'onboarding-error'
-                : 'onboarding-hint'
-            }
-            aria-live={key === 'username' ? 'polite' : undefined}
-          >
-            {errors[key] ||
-              (key === 'username'
-                ? {
-                    idle: '3–30 characters; start with a letter.',
-                    checking: 'Checking availability…',
-                    available: 'Username is available.',
-                    taken: 'Username is already in use.',
-                    error: 'Could not check username. Try again.'
-                  }[availability]
-                : '')}
-          </p>
-        </div>
-      ))}
-      <div className="onboarding-field onboarding-wide">
-        <label htmlFor="profile-bio">
-          Short bio <span>Optional</span>
-        </label>
-        <textarea
-          id="profile-bio"
-          value={value.bio}
-          maxLength={500}
-          rows={4}
-          aria-invalid={!!errors.bio}
-          aria-describedby="profile-bio-help"
-          onChange={(event) => update('bio', event.target.value)}
-        />
-        <p id="profile-bio-help" className="onboarding-error">
-          {errors.bio}
-        </p>
-      </div>
-      <div className="onboarding-avatar onboarding-wide" aria-label="Profile picture">
-        <div className="onboarding-avatar-placeholder" aria-hidden="true">
-          {value.fullName.trim().slice(0, 1).toUpperCase() || 'V'}
-        </div>
-        <div>
-          <strong>Profile picture</strong>
-          <p>Optional. Photo upload is not available yet; you can add one when uploads are supported.</p>
-        </div>
-      </div>
+      {fields.map(({ key, label, placeholder, required, max }) => {
+        const parsed = onboardingIdentitySchema.safeParse(value);
+        const fieldIssue = parsed.success
+          ? undefined
+          : parsed.error.issues.find((issue) => issue.path[0] === key);
+        const error = errors[key] || (touched[key] ? fieldIssue?.message : '') || '';
+        const complete = !!value[key].trim() && !fieldIssue && !error;
+        return (
+          <div className="onboarding-field" key={key}>
+            <div className="onboarding-label-row">
+              <label htmlFor={`profile-${key}`}>{label}</label>
+              {!required && <span className="onboarding-optional">Optional</span>}
+            </div>
+            <div className="onboarding-input-wrap">
+              <input
+                id={`profile-${key}`}
+                value={value[key]}
+                placeholder={placeholder}
+                maxLength={max}
+                required={required}
+                aria-invalid={!!error}
+                aria-describedby={`profile-${key}-help`}
+                onBlur={() => setTouched((current) => ({ ...current, [key]: true }))}
+                onChange={(event) => onChange({ ...value, [key]: event.target.value }, key)}
+              />
+              {complete && (
+                <span className="onboarding-field-check" role="img" aria-label={`${label} complete`}>
+                  <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                    <path
+                      d="m4.5 10 3.5 3.5 7.5-7.5"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </span>
+              )}
+            </div>
+            <p id={`profile-${key}-help`} className={error ? 'onboarding-error' : 'onboarding-hint'}>
+              {error}
+            </p>
+          </div>
+        );
+      })}
     </div>
   );
 }

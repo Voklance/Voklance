@@ -13,4 +13,21 @@ export const skillSelectionSchema = z
   })
   .strict();
 
+export const skillCreateSchema = z
+  .object({
+    name: z
+      .string()
+      .trim()
+      .transform((value) => value.replace(/\s+/g, ' '))
+      .pipe(
+        z
+          .string()
+          .min(1)
+          .max(80)
+          .regex(/[\p{L}\p{N}]/u)
+      )
+  })
+  .strict();
+
 export type SkillSelectionInput = z.infer<typeof skillSelectionSchema>;
+export type SkillCreateInput = z.infer<typeof skillCreateSchema>;

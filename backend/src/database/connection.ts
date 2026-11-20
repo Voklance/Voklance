@@ -1,5 +1,7 @@
 import mongoose from 'mongoose';
 import { env } from '../config/env.js';
+import Skill from '../modules/skills/model/Skill.js';
+import { catalogUpserts, skillSeeds } from './catalogSeeds.js';
 
 export async function connectDatabase() {
   if (!env.mongoUri) {
@@ -8,6 +10,7 @@ export async function connectDatabase() {
   }
   try {
     await mongoose.connect(env.mongoUri);
+    await Skill.bulkWrite(catalogUpserts(skillSeeds));
     console.info('Connected to MongoDB.');
   } catch (error) {
     console.error('MongoDB connection failed:', error instanceof Error ? error.message : 'Unknown error');

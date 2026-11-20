@@ -9,14 +9,25 @@ import { useSignOut } from '@/features/auth/hooks/useSignOut';
 import { useMessagingLifecycle } from '@/features/messaging/hooks/useMessaging';
 import { useNotificationRealtime } from '@/features/notifications/hooks/useNotifications';
 import { notificationTarget } from '@/features/notifications/components/NotificationCard';
-import { Link } from 'react-router';
+import { useFlash } from '@/components/shared/FlashMessages';
 
 export default function ApplicationLayout({ user }: { user: AuthUser }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const location = useLocation();
   const signOut = useSignOut();
+  const { showFlash } = useFlash();
   useMessagingLifecycle(user.id);
-  const realtime = useNotificationRealtime(user.id);
+  const { notice, dismiss } = useNotificationRealtime(user.id);
+  useEffect(() => {
+    if (!notice) return;
+    showFlash({
+      type: 'info',
+      title: notice.title,
+      message: notice.body,
+      to: notificationTarget(notice)
+    });
+    dismiss();
+  }, [notice, dismiss, showFlash]);
   useEffect(() => setMenuOpen(false), [location.pathname]);
   useEffect(() => {
     if (!window.matchMedia) return;
@@ -80,16 +91,6 @@ export default function ApplicationLayout({ user }: { user: AuthUser }) {
           onNavigate={() => setMenuOpen(false)}
         />
         <main className="dashboard-main" id="main-content" tabIndex={-1}>
-          {realtime.notice && (
-            <div className="message-toast" role="status">
-              <Link to={notificationTarget(realtime.notice)} onClick={realtime.dismiss}>
-                {realtime.notice.body}
-              </Link>
-              <button type="button" onClick={realtime.dismiss} aria-label="Dismiss message notice">
-                ×
-              </button>
-            </div>
-          )}
           {signOut.isError && (
             <p className="form-alert" role="alert">
               {apiErrorMessage(signOut.error)}

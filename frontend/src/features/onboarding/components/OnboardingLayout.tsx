@@ -9,10 +9,12 @@ export default function OnboardingLayout({ children }: { children: ReactNode }) 
   return (
     <div className="onboarding-shell">
       <header className="onboarding-header">
-        <Link to="/onboarding" className="brand" aria-label="Voklance onboarding">
-          <img src={logo} alt="Voklance" />
-        </Link>
-        <span>Professional profile setup</span>
+        <div className="onboarding-header-identity">
+          <Link to="/onboarding" className="brand" aria-label="Voklance onboarding">
+            <img src={logo} alt="Voklance" />
+          </Link>
+          <span>Professional Community for Tech &amp; Corporate Professionals</span>
+        </div>
         <button
           type="button"
           className="onboarding-exit"

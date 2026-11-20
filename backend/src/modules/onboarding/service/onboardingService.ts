@@ -3,7 +3,7 @@ import { AppError } from '../../../common/AppError.js';
 import { getOwnInterests } from '../../interests/service/interestService.js';
 import { getOwnEducations, getOwnExperiences } from '../../profiles/service/historyService.js';
 import { getOwnProfile } from '../../profiles/service/profileService.js';
-import { basicProfileSchema } from '../../profiles/validation/profileSchemas.js';
+import { onboardingIdentitySchema } from '../validation/onboardingSchemas.js';
 import { getOwnSkills } from '../../skills/service/skillService.js';
 import User from '../../users/model/User.js';
 import UserInterest from '../../interests/model/UserInterest.js';
@@ -12,13 +12,10 @@ import UserSkill from '../../skills/model/UserSkill.js';
 function profileReady(profile: OnboardingSnapshot['profile']) {
   return (
     !!profile &&
-    basicProfileSchema.safeParse({
-      username: profile.username,
-      fullName: profile.fullName,
-      headline: profile.headline,
-      country: profile.country,
-      city: profile.city,
-      bio: profile.bio
+    onboardingIdentitySchema.safeParse({
+      firstName: profile.firstName,
+      lastName: profile.lastName,
+      headline: profile.headline ?? ''
     }).success
   );
 }

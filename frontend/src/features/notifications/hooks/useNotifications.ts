@@ -1,6 +1,6 @@
 import type { NotificationCategory, NotificationDto, NotificationPage } from '@voklance/shared';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { currentConversation, messagingSocket } from '@/lib/socketClient';
 import { notificationApi } from '../api/notificationApi';
 export const notificationKeys = {
@@ -65,5 +65,6 @@ export function useNotificationRealtime(userId: string) {
     const timer = setTimeout(() => setNotice(null), 5_000);
     return () => clearTimeout(timer);
   }, [notice]);
-  return { notice, dismiss: () => setNotice(null) };
+  const dismiss = useCallback(() => setNotice(null), []);
+  return { notice, dismiss };
 }

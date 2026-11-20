@@ -1,5 +1,6 @@
 import type {
   ApiSuccess,
+  CatalogItem,
   CatalogPage,
   EducationCreateRequest,
   EducationPatchRequest,
@@ -11,6 +12,7 @@ import type {
   ExperiencesResponseData,
   InterestSelectionRequest,
   InterestsResponseData,
+  OnboardingIdentityRequest,
   OnboardingProgressRequest,
   OnboardingResponseData,
   ProfilePatchRequest,
@@ -30,6 +32,8 @@ export const onboardingApi = {
   saveProgress: (input: OnboardingProgressRequest) =>
     data<OnboardingResponseData>(apiClient.patch('/onboarding', input)),
   complete: () => data<OnboardingResponseData>(apiClient.post('/onboarding/complete', {})),
+  saveIdentity: (input: OnboardingIdentityRequest) =>
+    data<ProfileResponseData>(apiClient.patch('/onboarding/profile', input)),
   profile: () => data<ProfileResponseData>(apiClient.get('/profiles/me')),
   saveProfile: (input: ProfilePatchRequest) =>
     data<ProfileResponseData>(apiClient.patch('/profiles/me', input)),
@@ -37,7 +41,11 @@ export const onboardingApi = {
     data<UsernameAvailabilityData>(
       apiClient.get('/profiles/check-username', { params: { username }, signal })
     ),
-  skills: (search = '') => data<CatalogPage>(apiClient.get('/skills', { params: { search, limit: 50 } })),
+  skills: (search = '') => {
+    const term = search.trim();
+    return data<CatalogPage>(apiClient.get('/skills', { params: { search: term, limit: term ? 50 : 8 } }));
+  },
+  createSkill: (name: string) => data<{ skill: CatalogItem }>(apiClient.post('/skills', { name })),
   selectedSkills: () => data<SkillsResponseData>(apiClient.get('/users/me/skills')),
   saveSkills: (input: SkillSelectionRequest) =>
     data<SkillsResponseData>(apiClient.put('/users/me/skills', input)),

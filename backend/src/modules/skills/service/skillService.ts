@@ -1,4 +1,5 @@
 import type { CatalogItem } from '@voklance/shared';
+import { createHash } from 'node:crypto';
 import { Types } from 'mongoose';
 import { AppError } from '../../../common/AppError.js';
 import { escapeRegex, toCatalogDto } from '../../../common/catalogDto.js';
@@ -10,7 +11,14 @@ import UserSkill from '../model/UserSkill.js';
 
 export async function listSkills(query: CatalogQuery) {
   const filter = {
-    ...(query.search ? { name: { $regex: escapeRegex(query.search), $options: 'i' } } : {}),
+    ...(query.search
+      ? {
+          $or: [
+            { name: { $regex: escapeRegex(query.search), $options: 'i' } },
+            { category: { $regex: escapeRegex(query.search), $options: 'i' } }
+          ]
+        }
+      : {}),
     ...(query.category ? { category: { $regex: `^${escapeRegex(query.category)}$`, $options: 'i' } } : {})
   };
   const [records, total] = await Promise.all([
@@ -22,6 +30,26 @@ export async function listSkills(query: CatalogQuery) {
     Skill.countDocuments(filter)
   ]);
   return { items: records.map(toCatalogDto), page: query.page, limit: query.limit, total };
+}
+
+export async function createSkill(name: string): Promise<CatalogItem> {
+  const existing = await Skill.findOne({ name: { $regex: `^${escapeRegex(name)}$`, $options: 'i' } }).lean();
+  if (existing) return toCatalogDto(existing);
+
+  const normalized = name.toLocaleLowerCase('en');
+  const slug = `community-${createHash('sha256').update(normalized).digest('hex').slice(0, 32)}`;
+  try {
+    await Skill.updateOne(
+      { slug },
+      { $setOnInsert: { name, slug, category: 'Community' } },
+      { upsert: true, runValidators: true }
+    );
+  } catch (error) {
+    if (!(error && typeof error === 'object' && 'code' in error && error.code === 11000)) throw error;
+  }
+  const record = await Skill.findOne({ slug }).lean();
+  if (!record) throw new AppError(500, 'SKILL_CREATE_FAILED', 'Could not add this skill.');
+  return toCatalogDto(record);
 }
 
 export async function getOwnSkills(userId: string): Promise<CatalogItem[]> {

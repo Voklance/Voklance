@@ -8,14 +8,23 @@ import { getOwnSkills } from '../../skills/service/skillService.js';
 import { getOwnExperiences, getOwnEducations } from './historyService.js';
 import { listCertifications, listProjects } from './portfolioService.js';
 import ProfileUsernameAlias from '../model/ProfileUsernameAlias.js';
+import type { OnboardingIdentityInput } from '../../onboarding/validation/onboardingSchemas.js';
+
+export function splitFullName(fullName: string) {
+  const [firstName = '', ...rest] = fullName.trim().split(/\s+/);
+  return { firstName, lastName: rest.join(' ') };
+}
 
 export function toProfileDto(record: ProfileRecord & { _id: Types.ObjectId }): ProfessionalProfile {
+  const fallback = splitFullName(record.fullName);
   return {
     id: record._id.toString(),
     username: record.username,
     fullName: record.fullName,
+    firstName: record.firstName ?? fallback.firstName,
+    lastName: record.lastName ?? fallback.lastName,
     headline: record.headline,
-    country: record.country,
+    country: record.country ?? '',
     ...(record.city ? { city: record.city } : {}),
     ...(record.bio ? { bio: record.bio } : {}),
     ...(record.avatarUrl ? { avatarUrl: record.avatarUrl } : {}),
@@ -26,6 +35,40 @@ export function toProfileDto(record: ProfileRecord & { _id: Types.ObjectId }): P
     visibility: record.visibility ?? 'PRIVATE',
     sectionOrder: record.sectionOrder
   };
+}
+
+async function generatedUsername(userId: string) {
+  for (const prefix of ['u', 'v', 'w']) {
+    const username = `${prefix}-${userId}`;
+    const [profile, alias] = await Promise.all([
+      Profile.exists({ username }),
+      ProfileUsernameAlias.exists({ username })
+    ]);
+    if (!profile && !alias) return username;
+  }
+  throw new AppError(409, 'PROFILE_IDENTIFIER_UNAVAILABLE', 'Could not create a profile. Please retry.');
+}
+
+export async function saveOnboardingIdentity(userId: string, input: OnboardingIdentityInput) {
+  const fullName = `${input.firstName} ${input.lastName}`;
+  const changes = {
+    firstName: input.firstName,
+    lastName: input.lastName,
+    headline: input.headline ?? '',
+    fullName
+  };
+  const existing = await Profile.findOne({ userId }).select('_id').lean();
+  const profile = existing
+    ? await Profile.findOneAndUpdate({ userId }, { $set: changes }, { new: true, runValidators: true })
+    : await Profile.create({
+        userId,
+        username: await generatedUsername(userId),
+        country: '',
+        ...changes
+      });
+  if (!profile) throw new AppError(404, 'PROFILE_NOT_FOUND', 'Profile not found.');
+  await User.updateOne({ _id: userId }, { $set: { name: fullName } });
+  return toProfileDto(profile);
 }
 
 export async function getOwnProfile(userId: string): Promise<ProfessionalProfile | null> {
@@ -51,7 +94,12 @@ export async function updateOwnProfile(
       const basic = basicProfileSchema.safeParse(basicFields);
       if (!basic.success)
         throw new AppError(400, 'PROFILE_INCOMPLETE', 'Create a profile with the required fields first.');
-      const created = await Profile.create({ userId, ...basic.data, professionalStatus });
+      const created = await Profile.create({
+        userId,
+        ...basic.data,
+        ...splitFullName(basic.data.fullName),
+        professionalStatus
+      });
       return toProfileDto(created);
     }
 
@@ -65,7 +113,7 @@ export async function updateOwnProfile(
 
     const updated = await Profile.findOneAndUpdate(
       { userId },
-      { $set: input },
+      { $set: input.fullName ? { ...input, ...splitFullName(input.fullName) } : input },
       { new: true, runValidators: true }
     );
     if (!updated) throw new AppError(404, 'PROFILE_NOT_FOUND', 'Profile not found.');

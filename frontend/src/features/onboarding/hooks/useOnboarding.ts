@@ -36,6 +36,10 @@ export function useOnboarding() {
     mutationFn: onboardingApi.saveProfile,
     onSuccess: () => refresh([onboardingKeys.profile, onboardingKeys.progress])
   });
+  const saveIdentity = useMutation({
+    mutationFn: onboardingApi.saveIdentity,
+    onSuccess: () => refresh([onboardingKeys.profile, onboardingKeys.progress])
+  });
   const saveSkills = useMutation({
     mutationFn: onboardingApi.saveSkills,
     onSuccess: () => refresh([onboardingKeys.selectedSkills, onboardingKeys.progress])
@@ -56,6 +60,7 @@ export function useOnboarding() {
     experiences,
     educations,
     saveProfile,
+    saveIdentity,
     saveSkills,
     saveInterests,
     saveProgress,

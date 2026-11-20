@@ -25,8 +25,8 @@ const githubUrl = secureUrl.refine((value) => {
 const profileFields = z.object({
   username: usernameSchema,
   fullName: z.string().trim().min(2).max(80),
-  headline: z.string().trim().min(2).max(120),
-  country: z.string().trim().min(2).max(100),
+  headline: z.string().trim().max(120),
+  country: z.string().trim().max(100),
   city: z.string().trim().max(100).optional(),
   bio: z.string().trim().max(500).optional(),
   githubUrl: githubUrl.nullable().optional(),

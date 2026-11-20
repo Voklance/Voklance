@@ -1,19 +1,13 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 import axios from 'axios';
-import type {
-  AuthUser,
-  CatalogItem,
-  OnboardingSnapshot,
-  OnboardingStep,
-  ProfessionalStatus
-} from '@voklance/shared';
+import type { CatalogItem, OnboardingSnapshot, OnboardingStep, ProfessionalStatus } from '@voklance/shared';
 import ErrorState from '@/components/shared/ErrorState';
+import { useFlash } from '@/components/shared/FlashMessages';
 import LoadingState from '@/components/shared/LoadingState';
 import { currentUserKey } from '@/features/auth/hooks/useCurrentUser';
 import { authApi } from '@/features/auth/api/authApi';
 import { apiErrorMessage } from '@/lib/apiClient';
-import { onboardingApi } from '../api/onboardingApi';
 import CatalogSelector from '../components/CatalogSelector';
 import HistoryStep from '../components/HistoryStep';
 import OnboardingLayout from '../components/OnboardingLayout';
@@ -21,15 +15,17 @@ import OnboardingProgress, { stepNames } from '../components/OnboardingProgress'
 import ProfileStep from '../components/ProfileStep';
 import ProfessionalStatusStep, { professionalStatusLabels } from '../components/ProfessionalStatusStep';
 import { useInterestsCatalog, useOnboarding, useSkillsCatalog } from '../hooks/useOnboarding';
-import { fieldErrors, profileSchema, statusSchema, type ProfileDraft } from '../validation/onboardingSchemas';
+import {
+  fieldErrors,
+  onboardingIdentitySchema,
+  statusSchema,
+  type IdentityDraft
+} from '../validation/onboardingSchemas';
 
-const blankProfile: ProfileDraft = {
-  fullName: '',
-  username: '',
-  headline: '',
-  country: '',
-  city: '',
-  bio: ''
+const blankIdentity: IdentityDraft = {
+  firstName: '',
+  lastName: '',
+  headline: ''
 };
 
 function problem(error: unknown) {
@@ -87,17 +83,18 @@ function OnboardingWizard({
   onboarding: OnboardingState;
 }) {
   const navigate = useNavigate();
+  const { showFlash } = useFlash();
   const [snapshot, setSnapshot] = useState(initial);
   const [step, setStep] = useState<OnboardingStep>(initial.currentStep);
-  const [profile, setProfile] = useState<ProfileDraft>(() => ({
-    ...blankProfile,
-    fullName: onboarding.client.getQueryData<AuthUser | null>(currentUserKey)?.name || '',
-    ...initial.profile
+  const [identity, setIdentity] = useState<IdentityDraft>(() => ({
+    ...blankIdentity,
+    firstName: initial.profile?.firstName || '',
+    lastName: initial.profile?.lastName || '',
+    headline: initial.profile?.headline || ''
   }));
   const [status, setStatus] = useState<ProfessionalStatus | ''>(initial.profile?.professionalStatus || '');
   const [skills, setSkills] = useState<CatalogItem[]>(initial.skills);
   const [interests, setInterests] = useState<CatalogItem[]>(initial.interests);
-  const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [message, setMessage] = useState('');
   const [skillSearch, setSkillSearch] = useState('');
@@ -106,7 +103,8 @@ function OnboardingWizard({
   const [historyDirty, setHistoryDirty] = useState(false);
   const busy = useRef(false);
   const heading = useRef<HTMLHeadingElement>(null);
-  const skillCatalog = useSkillsCatalog(useDebounced(skillSearch), step === 3);
+  const debouncedSkillSearch = useDebounced(skillSearch);
+  const skillCatalog = useSkillsCatalog(debouncedSkillSearch, step === 3);
   const interestCatalog = useInterestsCatalog(useDebounced(interestSearch), step === 5);
   const history = {
     experiences: onboarding.experiences.data?.experiences || snapshot.experiences,
@@ -119,33 +117,24 @@ function OnboardingWizard({
   useEffect(() => {
     if (onboarding.progress.data?.onboarding) setSnapshot(onboarding.progress.data.onboarding);
   }, [onboarding.progress.data]);
-  const availability = useCallback((value: boolean | null) => setUsernameAvailable(value), []);
   const historyChanged = useCallback((value: boolean) => setHistoryDirty(value), []);
 
   async function persistCurrent() {
     if (step === 1) {
-      const parsed = profileSchema.safeParse(profile);
+      const parsed = onboardingIdentitySchema.safeParse(identity);
       if (!parsed.success) {
         setErrors(fieldErrors(parsed.error));
+        showFlash({ type: 'warning', message: 'Please complete the required profile fields.' });
         return false;
       }
-      if (usernameAvailable === false) {
-        setErrors({ username: 'Username is already in use.' });
-        return false;
-      }
-      // The check immediately before save also covers a pending debounce and competing registrations.
-      const result = await onboardingApi.username(parsed.data.username);
-      if (!result.available) {
-        setErrors({ username: 'Username is already in use.' });
-        return false;
-      }
-      await onboarding.saveProfile.mutateAsync(parsed.data);
-      setProfile(parsed.data);
+      await onboarding.saveIdentity.mutateAsync(parsed.data);
+      setIdentity(parsed.data);
       setErrors({});
     } else if (step === 2) {
       const parsed = statusSchema.safeParse(status);
       if (!parsed.success) {
         setErrors({ status: 'Choose a professional status.' });
+        showFlash({ type: 'warning', message: 'Please choose your professional status.' });
         return false;
       }
       await onboarding.saveProfile.mutateAsync({ professionalStatus: parsed.data });
@@ -153,6 +142,7 @@ function OnboardingWizard({
     } else if (step === 3) {
       if (!skills.length) {
         setErrors({ skills: 'Select at least one skill.' });
+        showFlash({ type: 'warning', message: 'Please select at least one skill.' });
         return false;
       }
       await onboarding.saveSkills.mutateAsync({ skillIds: skills.map((item) => item.id) });
@@ -160,12 +150,14 @@ function OnboardingWizard({
     } else if (step === 5) {
       if (!interests.length) {
         setErrors({ interests: 'Select at least one interest.' });
+        showFlash({ type: 'warning', message: 'Please select at least one interest.' });
         return false;
       }
       await onboarding.saveInterests.mutateAsync({ interestIds: interests.map((item) => item.id) });
       setErrors({});
     } else if (step === 4 && historyDirty) {
       setErrors({ form: 'Save or cancel the open experience or education form before continuing.' });
+      showFlash({ type: 'warning', message: 'Save or cancel the open form before continuing.' });
       return false;
     }
     return true;
@@ -188,8 +180,7 @@ function OnboardingWizard({
       setErrors({});
     } catch (error) {
       setMessage(problem(error));
-      if (axios.isAxiosError(error) && error.response?.data?.error?.code === 'USERNAME_TAKEN')
-        setErrors({ username: 'Username is already in use.' });
+      showFlash({ type: 'error', message: problem(error) });
     } finally {
       busy.current = false;
       setSaving(false);
@@ -210,9 +201,11 @@ function OnboardingWizard({
         throw new Error('Your completed account could not be confirmed. Please try again.');
       onboarding.client.setQueryData(currentUserKey, current);
       await onboarding.client.invalidateQueries({ queryKey: ['onboarding'] });
+      showFlash({ type: 'success', message: 'Your Voklance profile is ready.' });
       navigate('/app', { replace: true });
     } catch (error) {
       setMessage(problem(error));
+      showFlash({ type: 'error', message: problem(error) });
     } finally {
       busy.current = false;
       setSaving(false);
@@ -220,11 +213,29 @@ function OnboardingWizard({
   }
 
   const missing = [
-    !profileSchema.safeParse({ ...blankProfile, ...snapshot.profile }).success && 'Basic profile',
+    !onboardingIdentitySchema.safeParse({
+      firstName: snapshot.profile?.firstName,
+      lastName: snapshot.profile?.lastName,
+      headline: snapshot.profile?.headline || ''
+    }).success && 'Basic profile',
     !snapshot.profile?.professionalStatus && 'Professional status',
     !snapshot.skills.length && 'Skills',
     !snapshot.interests.length && 'Interests'
   ].filter((value): value is string => typeof value === 'string');
+  const profileCompletion =
+    [
+      identity.firstName.trim().length > 0,
+      identity.lastName.trim().length > 0 &&
+        `${identity.firstName.trim()} ${identity.lastName.trim()}`.length <= 80
+    ].filter(Boolean).length * 50;
+  const completionByStep: Record<OnboardingStep, number> = {
+    1: profileCompletion,
+    2: statusSchema.safeParse(status).success ? 100 : 0,
+    3: skills.length > 0 ? 100 : 0,
+    4: history.experiences.length > 0 || history.education.length > 0 ? 100 : 0,
+    5: interests.length > 0 ? 100 : 0,
+    6: snapshot.status === 'COMPLETED' ? 100 : 0
+  };
 
   function submit() {
     if (step === 6) void finish();
@@ -233,15 +244,7 @@ function OnboardingWizard({
 
   return (
     <div className="onboarding-container">
-      <OnboardingProgress
-        step={step}
-        completed={snapshot.completedSteps}
-        onSelect={(target) => {
-          if (target !== step) void move(target);
-        }}
-      />
       <div className="onboarding-content">
-        <p className="onboarding-count">Step {step} of 6</p>
         <h1 tabIndex={-1} ref={heading}>
           {stepNames[step - 1]}
         </h1>
@@ -257,6 +260,15 @@ function OnboardingWizard({
             ][step - 1]
           }
         </p>
+        <p className="onboarding-count">Step {step} of 6</p>
+        <OnboardingProgress
+          step={step}
+          completionByStep={completionByStep}
+          completed={snapshot.completedSteps}
+          onSelect={(target) => {
+            if (target !== step) void move(target);
+          }}
+        />
         {message && (
           <p className="onboarding-alert" role="alert">
             {message}
@@ -270,10 +282,17 @@ function OnboardingWizard({
         <div>
           <div hidden={step !== 1}>
             <ProfileStep
-              value={profile}
-              onChange={setProfile}
+              value={identity}
+              onChange={(next, field) => {
+                setIdentity(next);
+                setErrors((current) => {
+                  if (!current[field]) return current;
+                  const updated = { ...current };
+                  delete updated[field];
+                  return updated;
+                });
+              }}
               errors={errors}
-              onAvailability={availability}
             />
           </div>
           <div hidden={step !== 2}>
@@ -283,6 +302,7 @@ function OnboardingWizard({
             <CatalogSelector
               kind="skill"
               search={skillSearch}
+              loadedSearch={debouncedSkillSearch}
               onSearch={setSkillSearch}
               selected={skills}
               onChange={setSkills}
@@ -320,14 +340,16 @@ function OnboardingWizard({
             <Review snapshot={snapshot} missing={missing} onEdit={(target) => void move(target)} />
           </div>
           <div className="onboarding-actions">
-            <button
-              type="button"
-              className="onboarding-back"
-              disabled={step === 1 || saving}
-              onClick={() => void move((step - 1) as OnboardingStep)}
-            >
-              Previous
-            </button>
+            {step > 1 && (
+              <button
+                type="button"
+                className="onboarding-back"
+                disabled={saving}
+                onClick={() => void move((step - 1) as OnboardingStep)}
+              >
+                Previous
+              </button>
+            )}
             <button
               type="button"
               onClick={submit}
@@ -342,7 +364,8 @@ function OnboardingWizard({
                     : 'Complete onboarding'
                   : step === 4
                     ? 'Continue'
-                    : 'Save and continue'}
+                    : 'Next'}
+              {step < 6 && !saving && <span aria-hidden="true">→</span>}
             </button>
           </div>
         </div>
@@ -371,10 +394,7 @@ function Review({
         {snapshot.profile ? (
           <>
             <strong>{snapshot.profile.fullName}</strong>
-            <span>@{snapshot.profile.username}</span>
-            <span>{snapshot.profile.headline}</span>
-            <span>{[snapshot.profile.city, snapshot.profile.country].filter(Boolean).join(', ')}</span>
-            {snapshot.profile.bio && <p>{snapshot.profile.bio}</p>}
+            {snapshot.profile.headline && <span>{snapshot.profile.headline}</span>}
           </>
         ) : (
           <p>Not saved yet.</p>

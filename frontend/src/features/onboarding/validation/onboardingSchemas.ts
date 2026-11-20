@@ -11,12 +11,24 @@ export const profileSchema = z.object({
       USERNAME_PATTERN,
       'Use 3–30 lowercase letters, numbers, dots, underscores or hyphens; start with a letter.'
     ),
-  headline: z.string().trim().min(2, 'Enter a professional headline.').max(120),
-  country: z.string().trim().min(2, 'Enter your country.').max(100),
+  headline: z.string().trim().max(120),
+  country: z.string().trim().max(100),
   city: z.string().trim().max(100),
   bio: z.string().trim().max(500)
 });
 export type ProfileDraft = z.infer<typeof profileSchema>;
+
+export const onboardingIdentitySchema = z
+  .object({
+    firstName: z.string().trim().min(1, 'Enter your first name.').max(80),
+    lastName: z.string().trim().min(1, 'Enter your last name.').max(80),
+    headline: z.string().trim().max(120).optional().default('')
+  })
+  .refine((value) => `${value.firstName} ${value.lastName}`.length <= 80, {
+    path: ['lastName'],
+    message: 'First and last name together must be 80 characters or fewer.'
+  });
+export type IdentityDraft = z.infer<typeof onboardingIdentitySchema>;
 
 export const statusSchema = z.enum(PROFESSIONAL_STATUSES);
 
