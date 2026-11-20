@@ -1,4 +1,9 @@
-import { PROFESSIONAL_STATUSES, PROFILE_VISIBILITIES, USERNAME_PATTERN } from '@voklance/shared';
+import {
+  PROFESSIONAL_STATUSES,
+  PROFILE_VISIBILITIES,
+  PROFILE_SECTION_IDS,
+  USERNAME_PATTERN
+} from '@voklance/shared';
 import { z } from 'zod';
 
 export const usernameSchema = z.string().trim().toLowerCase().regex(USERNAME_PATTERN);
@@ -36,7 +41,14 @@ export const professionalStatusSchema = z.enum(PROFESSIONAL_STATUSES);
 
 export const profilePatchSchema = profileFields
   .partial()
-  .extend({ professionalStatus: professionalStatusSchema.optional() })
+  .extend({
+    professionalStatus: professionalStatusSchema.optional(),
+    sectionOrder: z
+      .array(z.enum(PROFILE_SECTION_IDS))
+      .length(PROFILE_SECTION_IDS.length)
+      .refine((items) => new Set(items).size === PROFILE_SECTION_IDS.length)
+      .optional()
+  })
   .strict()
   .refine((value) => Object.keys(value).length > 0, 'Provide at least one profile field.');
 

@@ -17,4 +17,5 @@ const schema = new Schema<PostRecord>(
   { timestamps: true }
 );
 schema.index({ status: 1, createdAt: -1, _id: -1 });
+schema.index({ content: 'text' });
 export default mongoose.model<PostRecord>('Post', schema);

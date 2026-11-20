@@ -17,6 +17,10 @@ import ProfileSidebar from '@/components/shared/ProfileSidebar';
 import SideNavigation from '@/components/navigation/SideNavigation';
 import { profileApi } from '../api/profileApi';
 import { communityApi } from '@/features/communities/api/communityApi';
+import { connectionApi } from '@/features/connections/api/connectionApi';
+import { messagingApi } from '@/features/messaging/api/messagingApi';
+import { githubApi } from '@/features/github/api/githubApi';
+import { portfolioApi } from '../api/portfolioApi';
 import MyProfilePage from './MyProfilePage';
 import EditProfilePage from './EditProfilePage';
 import PublicProfilePage from './PublicProfilePage';
@@ -45,6 +49,14 @@ vi.mock('@/features/onboarding/api/onboardingApi', () => ({
   }
 }));
 vi.mock('@/features/communities/api/communityApi', () => ({ communityApi: { mine: vi.fn() } }));
+vi.mock('@/features/connections/api/connectionApi', () => ({
+  connectionApi: { counts: vi.fn(), statusByUsername: vi.fn(), send: vi.fn(), visible: vi.fn() }
+}));
+vi.mock('@/features/messaging/api/messagingApi', () => ({ messagingApi: { unreadCount: vi.fn() } }));
+vi.mock('@/features/github/api/githubApi', () => ({ githubApi: { featured: vi.fn(), portfolio: vi.fn() } }));
+vi.mock('../api/portfolioApi', () => ({
+  portfolioApi: { certifications: vi.fn(), projects: vi.fn(), completeness: vi.fn() }
+}));
 
 const user: AuthUser = {
   id: 'a'.repeat(24),
@@ -109,6 +121,34 @@ function renderPage(path: string, includeShell = false) {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(communityApi.mine).mockResolvedValue({ items: [], nextCursor: null, hasMore: false });
+  vi.mocked(connectionApi.counts).mockResolvedValue({ counts: { connections: 0, incoming: 0, sent: 0 } });
+  vi.mocked(messagingApi.unreadCount).mockResolvedValue({ count: 0 });
+  vi.mocked(githubApi.featured).mockResolvedValue({ connected: false, repositories: [] });
+  vi.mocked(githubApi.portfolio).mockResolvedValue({ connected: false, repositories: [] });
+  vi.mocked(portfolioApi.certifications).mockResolvedValue({ items: [] });
+  vi.mocked(portfolioApi.projects).mockResolvedValue({ items: [] });
+  vi.mocked(portfolioApi.completeness).mockResolvedValue({
+    percentage: 40,
+    completedSections: ['Basic profile'],
+    suggestedSections: []
+  });
+  vi.mocked(connectionApi.statusByUsername).mockResolvedValue({
+    status: 'none',
+    requestId: null,
+    connectionCount: null,
+    isSelf: false
+  });
+  vi.mocked(connectionApi.send).mockResolvedValue({
+    connection: {
+      id: 'f'.repeat(24),
+      status: 'pending',
+      requesterId: user.id,
+      recipientId: 'e'.repeat(24),
+      requestedAt: new Date().toISOString(),
+      respondedAt: null
+    }
+  });
+  vi.mocked(connectionApi.visible).mockResolvedValue({ items: [], hasMore: false, nextCursor: null });
   experiences = [];
   education = [];
   vi.mocked(profileApi.own).mockResolvedValue({ profile });
@@ -170,6 +210,44 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('professional profile screens', () => {
+  it('shows public portfolio sections and an owner share link', async () => {
+    vi.mocked(portfolioApi.projects).mockResolvedValue({
+      items: [
+        {
+          id: '1'.repeat(24),
+          title: 'Accessibility toolkit',
+          description: 'A toolkit for accessible interfaces.',
+          role: 'Maintainer',
+          technologies: ['TypeScript'],
+          projectUrl: 'https://example.test/toolkit',
+          repositoryUrl: null,
+          startDate: null,
+          endDate: null,
+          isOngoing: false,
+          isFeatured: true,
+          displayOrder: 0
+        }
+      ]
+    });
+    vi.mocked(portfolioApi.certifications).mockResolvedValue({
+      items: [
+        {
+          id: '2'.repeat(24),
+          name: 'Cloud Engineer',
+          issuingOrganization: 'Example Org',
+          issueDate: '2024-05-01',
+          expirationDate: null,
+          credentialId: null,
+          credentialUrl: 'https://example.test/cert'
+        }
+      ]
+    });
+    renderPage('/app/profile');
+    expect(await screen.findByText('Accessibility toolkit')).toBeTruthy();
+    expect(screen.getByText('Cloud Engineer')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'View as visitor' }).getAttribute('href')).toBe('/u/ada-dev');
+    expect(screen.getByRole('link', { name: 'Live project' })).toHaveProperty('rel', 'noopener noreferrer');
+  });
   it('renders saved owner details and real sidebar navigation', () => {
     renderPage('/app/profile', true);
     expect(screen.getByRole('heading', { name: 'Ada Developer', level: 1 })).toBeTruthy();
@@ -292,6 +370,10 @@ describe('professional profile screens', () => {
   it('renders a public profile and handles missing profiles', async () => {
     renderPage('/app/professionals/ada-dev');
     expect(await screen.findByRole('heading', { name: 'Ada Developer' })).toBeTruthy();
+    fireEvent.click(await screen.findByRole('button', { name: 'Connect' }));
+    await waitFor(() =>
+      expect(connectionApi.send).toHaveBeenCalledWith({ recipientUsername: 'ada-dev' }, expect.anything())
+    );
     cleanup();
     vi.mocked(profileApi.public).mockRejectedValue({ isAxiosError: true, response: { status: 404 } });
     renderPage('/app/professionals/missing-user');

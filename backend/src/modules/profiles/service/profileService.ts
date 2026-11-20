@@ -6,6 +6,8 @@ import { basicProfileSchema, type ProfilePatchInput } from '../validation/profil
 import User from '../../users/model/User.js';
 import { getOwnSkills } from '../../skills/service/skillService.js';
 import { getOwnExperiences, getOwnEducations } from './historyService.js';
+import { listCertifications, listProjects } from './portfolioService.js';
+import ProfileUsernameAlias from '../model/ProfileUsernameAlias.js';
 
 export function toProfileDto(record: ProfileRecord & { _id: Types.ObjectId }): ProfessionalProfile {
   return {
@@ -21,7 +23,8 @@ export function toProfileDto(record: ProfileRecord & { _id: Types.ObjectId }): P
     ...(record.githubUrl ? { githubUrl: record.githubUrl } : {}),
     ...(record.portfolioUrl ? { portfolioUrl: record.portfolioUrl } : {}),
     ...(record.websiteUrl ? { websiteUrl: record.websiteUrl } : {}),
-    visibility: record.visibility ?? 'PRIVATE'
+    visibility: record.visibility ?? 'PRIVATE',
+    sectionOrder: record.sectionOrder
   };
 }
 
@@ -35,7 +38,14 @@ export async function updateOwnProfile(
   input: ProfilePatchInput
 ): Promise<ProfessionalProfile> {
   try {
-    const existing = await Profile.findOne({ userId }).select('_id').lean();
+    const existing = await Profile.findOne({ userId }).select('_id username').lean();
+    if (input.username) {
+      const reserved = await ProfileUsernameAlias.findOne({ username: input.username })
+        .select('userId')
+        .lean();
+      if (reserved && reserved.userId.toString() !== userId)
+        throw new AppError(409, 'USERNAME_TAKEN', 'Username is already in use.');
+    }
     if (!existing) {
       const { professionalStatus, ...basicFields } = input;
       const basic = basicProfileSchema.safeParse(basicFields);
@@ -43,6 +53,14 @@ export async function updateOwnProfile(
         throw new AppError(400, 'PROFILE_INCOMPLETE', 'Create a profile with the required fields first.');
       const created = await Profile.create({ userId, ...basic.data, professionalStatus });
       return toProfileDto(created);
+    }
+
+    if (input.username && input.username !== existing.username) {
+      await ProfileUsernameAlias.updateOne(
+        { username: existing.username },
+        { $setOnInsert: { username: existing.username, userId } },
+        { upsert: true }
+      );
     }
 
     const updated = await Profile.findOneAndUpdate(
@@ -64,7 +82,10 @@ export async function updateOwnProfile(
 }
 
 export async function getPublicProfile(username: string): Promise<PublicProfileResponseData> {
-  const record = await Profile.findOne({ username, visibility: 'PUBLIC' }).lean();
+  const direct = await Profile.findOne({ username, visibility: 'PUBLIC' }).lean();
+  const alias = direct ? null : await ProfileUsernameAlias.findOne({ username }).select('userId').lean();
+  const record =
+    direct ?? (alias ? await Profile.findOne({ userId: alias.userId, visibility: 'PUBLIC' }).lean() : null);
   if (!record) throw new AppError(404, 'PROFILE_NOT_FOUND', 'Profile not found.');
   const owner = await User.findById(record.userId).select('accountStatus onboardingStatus').lean();
   if (
@@ -73,16 +94,25 @@ export async function getPublicProfile(username: string): Promise<PublicProfileR
     owner.onboardingStatus !== 'COMPLETED'
   )
     throw new AppError(404, 'PROFILE_NOT_FOUND', 'Profile not found.');
-  const [skills, experiences, education] = await Promise.all([
+  const [skills, experiences, education, certifications, projects] = await Promise.all([
     getOwnSkills(record.userId.toString()),
     getOwnExperiences(record.userId.toString()),
-    getOwnEducations(record.userId.toString())
+    getOwnEducations(record.userId.toString()),
+    listCertifications(record.userId.toString()),
+    listProjects(record.userId.toString())
   ]);
   const { id: _id, visibility: _visibility, avatarUrl: _avatarUrl, ...profile } = toProfileDto(record);
-  return { profile, skills, experiences, education };
+  return { profile, skills, experiences, education, certifications, projects };
 }
 
 export async function checkUsername(userId: string, username: string) {
-  const owner = await Profile.findOne({ username }).select('userId').lean();
-  return { username, available: !owner || owner.userId.toString() === userId };
+  const [owner, alias] = await Promise.all([
+    Profile.findOne({ username }).select('userId').lean(),
+    ProfileUsernameAlias.findOne({ username }).select('userId').lean()
+  ]);
+  return {
+    username,
+    available:
+      (!owner || owner.userId.toString() === userId) && (!alias || alias.userId.toString() === userId)
+  };
 }

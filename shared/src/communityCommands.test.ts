@@ -77,10 +77,28 @@ describe('community command payload contracts', () => {
     expect(meetupPayloadSchema.safeParse({ ...payload, rsvp: true }).success).toBe(false);
   });
   it('accepts optional referral experience and skills while preserving old payloads', () => {
-    const base = { jobTitle: 'Engineer', company: 'Example Co', location: 'Remote', workMode: 'remote', jobUrl: 'https://example.com/job', description: 'A professional engineering role.' };
+    const base = {
+      jobTitle: 'Engineer',
+      company: 'Example Co',
+      location: 'Remote',
+      workMode: 'remote',
+      jobUrl: 'https://example.com/job',
+      description: 'A professional engineering role.'
+    };
     expect(referralPayloadSchema.safeParse(base).success).toBe(true);
-    expect(referralPayloadSchema.safeParse({ ...base, experienceMin: 2, experienceMax: 4, requiredSkills: ['React'] }).success).toBe(true);
-    expect(referralPayloadSchema.safeParse({ ...base, experienceMin: 5, experienceMax: 2 }).success).toBe(false);
-    expect(referralPayloadSchema.safeParse({ ...base, requiredSkills: Array(13).fill('React') }).success).toBe(false);
+    expect(
+      referralPayloadSchema.safeParse({
+        ...base,
+        experienceMin: 2,
+        experienceMax: 4,
+        requiredSkills: ['React']
+      }).success
+    ).toBe(true);
+    expect(referralPayloadSchema.safeParse({ ...base, experienceMin: 5, experienceMax: 2 }).success).toBe(
+      false
+    );
+    expect(
+      referralPayloadSchema.safeParse({ ...base, requiredSkills: Array(13).fill('React') }).success
+    ).toBe(false);
   });
 });

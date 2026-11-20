@@ -215,6 +215,12 @@ export default function AuthForm({ mode }: { mode: Mode }) {
         {isSignup ? 'Already have an account?' : 'New to Voklance?'}{' '}
         <Link to={isSignup ? '/login' : '/signup'}>{isSignup ? 'Sign in' : 'Create an account'}</Link>
       </p>
+      {!isSignup && (
+        <p className="switch-view">
+          <Link to="/forgot-password">Forgot password?</Link> ·{' '}
+          <Link to="/reactivate">Reactivate account</Link>
+        </p>
+      )}
     </section>
   );
 }

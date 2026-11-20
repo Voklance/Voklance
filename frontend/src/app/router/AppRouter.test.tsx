@@ -9,7 +9,67 @@ import { currentUserKey } from '@/features/auth/hooks/useCurrentUser';
 import { profileApi } from '@/features/profiles/api/profileApi';
 import { feedApi } from '@/features/feed/api/feedApi';
 import { communityApi } from '@/features/communities/api/communityApi';
+import { connectionApi } from '@/features/connections/api/connectionApi';
+import { messagingApi } from '@/features/messaging/api/messagingApi';
+import { notificationApi } from '@/features/notifications/api/notificationApi';
+import { githubApi } from '@/features/github/api/githubApi';
+import { recommendationApi } from '@/features/recommendations/api/recommendationApi';
+import { bookmarkApi } from '@/features/bookmarks/api/bookmarkApi';
+import { portfolioApi } from '@/features/profiles/api/portfolioApi';
 import AppRouter from './AppRouter';
+
+const fakeSocket = vi.hoisted(() => ({
+  connected: true,
+  on: vi.fn(),
+  off: vi.fn(),
+  connect: vi.fn(),
+  disconnect: vi.fn()
+}));
+vi.mock('@/lib/socketClient', () => ({
+  messagingSocket: () => fakeSocket,
+  currentConversation: () => null,
+  setActiveConversation: vi.fn(),
+  disconnectMessagingSocket: vi.fn()
+}));
+vi.mock('@/features/messaging/api/messagingApi', () => ({ messagingApi: { unreadCount: vi.fn() } }));
+vi.mock('@/features/notifications/api/notificationApi', () => ({
+  notificationApi: {
+    list: vi.fn(),
+    unread: vi.fn(),
+    read: vi.fn(),
+    readAll: vi.fn(),
+    preferences: vi.fn(),
+    savePreferences: vi.fn()
+  }
+}));
+vi.mock('@/features/github/api/githubApi', () => ({
+  githubApi: {
+    connection: vi.fn(),
+    featured: vi.fn(),
+    portfolio: vi.fn(),
+    repositories: vi.fn(),
+    connect: vi.fn(),
+    disconnect: vi.fn(),
+    sync: vi.fn(),
+    saveFeatured: vi.fn()
+  }
+}));
+vi.mock('@/features/recommendations/api/recommendationApi', () => ({
+  recommendationApi: {
+    feed: vi.fn(),
+    recommendations: vi.fn(),
+    feedback: vi.fn(),
+    undoFeedback: vi.fn(),
+    preferences: vi.fn(),
+    savePreferences: vi.fn()
+  }
+}));
+vi.mock('@/features/bookmarks/api/bookmarkApi', () => ({
+  bookmarkApi: { saved: vi.fn(), collections: vi.fn(), activity: vi.fn() }
+}));
+vi.mock('@/features/profiles/api/portfolioApi', () => ({
+  portfolioApi: { certifications: vi.fn(), projects: vi.fn(), completeness: vi.fn() }
+}));
 
 vi.mock('@/features/auth/api/authApi', () => ({
   authApi: { currentUser: vi.fn(), login: vi.fn(), signup: vi.fn(), logout: vi.fn() }
@@ -30,6 +90,9 @@ vi.mock('@/features/profiles/api/profileApi', () => ({
 vi.mock('@/features/feed/api/feedApi', () => ({ feedApi: { feed: vi.fn(), saved: vi.fn() } }));
 vi.mock('@/features/communities/api/communityApi', () => ({
   communityApi: { discover: vi.fn(), mine: vi.fn() }
+}));
+vi.mock('@/features/connections/api/connectionApi', () => ({
+  connectionApi: { counts: vi.fn(), mine: vi.fn(), professionals: vi.fn(), requests: vi.fn() }
 }));
 
 const incomplete: AuthUser = {
@@ -69,12 +132,54 @@ beforeEach(() => {
   vi.mocked(profileApi.educations).mockResolvedValue({ educations: [] });
   vi.mocked(feedApi.feed).mockResolvedValue({ items: [], nextCursor: null, hasMore: false });
   vi.mocked(feedApi.saved).mockResolvedValue({ items: [], nextCursor: null, hasMore: false });
+  vi.mocked(bookmarkApi.saved).mockResolvedValue({ items: [], nextCursor: null, hasMore: false });
+  vi.mocked(bookmarkApi.collections).mockResolvedValue({ items: [], nextCursor: null, hasMore: false });
+  vi.mocked(bookmarkApi.activity).mockResolvedValue({ items: [], nextCursor: null, hasMore: false });
+  vi.mocked(portfolioApi.certifications).mockResolvedValue({ items: [] });
+  vi.mocked(portfolioApi.projects).mockResolvedValue({ items: [] });
+  vi.mocked(portfolioApi.completeness).mockResolvedValue({
+    percentage: 0,
+    completedSections: [],
+    suggestedSections: []
+  });
   vi.mocked(communityApi.discover).mockResolvedValue({ items: [], nextCursor: null, hasMore: false });
   vi.mocked(communityApi.mine).mockResolvedValue({ items: [], nextCursor: null, hasMore: false });
+  vi.mocked(connectionApi.counts).mockResolvedValue({ counts: { connections: 0, incoming: 0, sent: 0 } });
+  vi.mocked(connectionApi.mine).mockResolvedValue({
+    items: [],
+    nextCursor: null,
+    hasMore: false,
+    counts: { connections: 0, incoming: 0, sent: 0 }
+  });
+  vi.mocked(connectionApi.professionals).mockResolvedValue({ items: [], nextCursor: null, hasMore: false });
+  vi.mocked(connectionApi.requests).mockResolvedValue({ items: [], nextCursor: null, hasMore: false });
+  vi.mocked(messagingApi.unreadCount).mockResolvedValue({ count: 0 });
+  vi.mocked(notificationApi.unread).mockResolvedValue({ unreadCount: 0 });
+  vi.mocked(notificationApi.list).mockResolvedValue({ items: [], hasMore: false, nextCursor: null });
+  vi.mocked(githubApi.connection).mockResolvedValue({ connected: false });
+  vi.mocked(githubApi.featured).mockResolvedValue({ connected: false, repositories: [] });
+  vi.mocked(githubApi.portfolio).mockResolvedValue({ connected: false, repositories: [] });
+  vi.mocked(recommendationApi.feed).mockResolvedValue({ items: [], hasMore: false, nextCursor: null });
+  vi.mocked(recommendationApi.recommendations).mockResolvedValue({
+    items: [],
+    hasMore: false,
+    nextCursor: null
+  });
 });
 afterEach(cleanup);
 
 describe('application access matrix', () => {
+  it('opens the compact navigation, closes with Escape, and exposes a skip link', async () => {
+    renderRoute('/app', completed);
+    const toggle = await screen.findByRole('button', { name: 'Open menu' });
+    expect(screen.getByRole('link', { name: 'Skip to main content' }).getAttribute('href')).toBe(
+      '#main-content'
+    );
+    fireEvent.click(toggle);
+    expect(screen.getByRole('button', { name: 'Close menu' }).getAttribute('aria-expanded')).toBe('true');
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.getByRole('button', { name: 'Open menu' }).getAttribute('aria-expanded')).toBe('false');
+  });
   it.each([
     ['/app', null, 'Welcome back.'],
     ['/onboarding', null, 'Welcome back.'],
@@ -96,9 +201,12 @@ describe('application access matrix', () => {
     ['/signup', completed, 'Professional feed'],
     ['/onboarding', completed, 'Professional feed'],
     ['/app', completed, 'Professional feed'],
-    ['/app/saved', completed, 'Saved posts'],
+    ['/app/saved', completed, 'Saved items'],
+    ['/app/activity', completed, 'Your activity'],
     ['/app/communities', completed, 'Discover professional communities'],
     ['/app/profile', completed, 'Your profile'],
+    ['/app/network', completed, 'My Network'],
+    ['/app/network/discover', completed, 'Discover Professionals'],
     ['/', completed, 'Professional feed'],
     ['/account?communities', completed, 'Discover professional communities']
   ] as const)('%s routes correctly for %s', async (path, user, heading) => {

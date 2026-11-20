@@ -1,6 +1,10 @@
 import {
-  referralApplicationSchema, referralOfferSchema, referralPayloadSchema,
-  needReferralPayloadSchema, applicationStatuses, offerStatuses
+  referralApplicationSchema,
+  referralOfferSchema,
+  referralPayloadSchema,
+  needReferralPayloadSchema,
+  applicationStatuses,
+  offerStatuses
 } from '@voklance/shared';
 import { z } from 'zod';
 
@@ -10,11 +14,13 @@ export const opportunityParams = z.object({ opportunityId: id }).strict();
 export const needParams = z.object({ needId: id }).strict();
 export const applicationParams = z.object({ applicationId: id }).strict();
 export const offerParams = z.object({ offerId: id }).strict();
-export const referralPageQuery = z.object({
-  limit: z.coerce.number().int().min(1).max(50).default(10),
-  cursor: z.string().min(1).max(256).optional(),
-  status: z.enum(['OPEN', 'CLOSED', 'EXPIRED', 'FULFILLED']).optional()
-}).strict();
+export const referralPageQuery = z
+  .object({
+    limit: z.coerce.number().int().min(1).max(50).default(10),
+    cursor: z.string().min(1).max(256).optional(),
+    status: z.enum(['OPEN', 'CLOSED', 'EXPIRED', 'FULFILLED']).optional()
+  })
+  .strict();
 export const responsePageQuery = referralPageQuery.omit({ status: true });
 export const opportunityUpdateBody = z.object({ details: referralPayloadSchema }).strict();
 export const needUpdateBody = z.object({ details: needReferralPayloadSchema }).strict();

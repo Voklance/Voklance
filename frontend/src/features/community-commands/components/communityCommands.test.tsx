@@ -55,6 +55,17 @@ const commands: CommandMetadata[] = [
     enabled: true,
     payloadVersion: 1,
     displayType: 'meetup'
+  },
+  {
+    id: 'resource',
+    command: '/resource',
+    label: 'Share resource',
+    description: 'Share a professional document.',
+    iconId: 'document',
+    category: 'knowledge',
+    enabled: true,
+    payloadVersion: 1,
+    displayType: 'resource'
   }
 ];
 const community: CommunityDetail = {
@@ -104,7 +115,13 @@ const eventActivity: CommunityActivity = {
   id: 'c'.repeat(24),
   command: 'event',
   commandLabel: 'Professional event',
-  payload: { title: 'Engineering forum', description: 'A professional engineering discussion.', startAt: '2027-01-10T10:00:00.000Z', locationType: 'online', locationOrUrl: 'https://example.com/event' }
+  payload: {
+    title: 'Engineering forum',
+    description: 'A professional engineering discussion.',
+    startAt: '2027-01-10T10:00:00.000Z',
+    locationType: 'online',
+    locationOrUrl: 'https://example.com/event'
+  }
 };
 const page = <T,>(items: T[], nextCursor: string | null = null) => ({
   items,
@@ -137,7 +154,7 @@ describe('community command UI', () => {
     mount();
     const input = await screen.findByRole('combobox', { name: 'Choose a structured action' });
     fireEvent.change(input, { target: { value: '/' } });
-    expect(within(screen.getByRole('listbox')).getAllByRole('option')).toHaveLength(4);
+    expect(within(screen.getByRole('listbox')).getAllByRole('option')).toHaveLength(5);
     fireEvent.keyDown(input, { key: 'ArrowDown' });
     fireEvent.keyDown(input, { key: 'Enter' });
     expect(await screen.findByRole('heading', { name: 'Referral request' })).toBeTruthy();
@@ -152,7 +169,8 @@ describe('community command UI', () => {
     ['/referral', 'Referral opportunity', 'Job title'],
     ['/needreferral', 'Referral request', 'Experience level'],
     ['/event', 'Professional event', 'Event title'],
-    ['/meetup', 'Professional meetup', 'Meetup title']
+    ['/meetup', 'Professional meetup', 'Meetup title'],
+    ['/resource', 'Share resource', 'Title']
   ])('opens the structured %s form by mouse', async (slash, title, field) => {
     mount();
     fireEvent.change(await screen.findByRole('combobox', { name: 'Choose a structured action' }), {

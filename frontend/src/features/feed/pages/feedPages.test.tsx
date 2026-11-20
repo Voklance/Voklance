@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
-import type { FeedComment, FeedPost } from '@voklance/shared';
+import type { FeedComment, FeedPost, RecommendedPost } from '@voklance/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { feedApi } from '../api/feedApi';
+import { recommendationApi } from '@/features/recommendations/api/recommendationApi';
 import HomePage from './HomePage';
 import SavedPostsPage from './SavedPostsPage';
 
@@ -21,6 +22,16 @@ vi.mock('../api/feedApi', () => ({
     addComment: vi.fn(),
     editComment: vi.fn(),
     removeComment: vi.fn()
+  }
+}));
+vi.mock('@/features/recommendations/api/recommendationApi', () => ({
+  recommendationApi: {
+    feed: vi.fn(),
+    recommendations: vi.fn(),
+    feedback: vi.fn(),
+    undoFeedback: vi.fn(),
+    preferences: vi.fn(),
+    savePreferences: vi.fn()
   }
 }));
 
@@ -66,6 +77,16 @@ beforeEach(() => {
     nextCursor: null,
     hasMore: false
   }));
+  vi.mocked(recommendationApi.feed).mockImplementation(async () => ({
+    items: current.map((item) => ({ ...item, reason: 'Recent professional post' })),
+    nextCursor: null,
+    hasMore: false
+  }));
+  vi.mocked(recommendationApi.recommendations).mockResolvedValue({
+    items: [],
+    hasMore: false,
+    nextCursor: null
+  });
   vi.mocked(feedApi.saved).mockImplementation(async () => ({
     items: [...saved],
     nextCursor: null,
@@ -123,8 +144,8 @@ afterEach(cleanup);
 
 describe('home feed', () => {
   it('shows loading and then an empty state', async () => {
-    let resolve: (value: { items: FeedPost[]; nextCursor: null; hasMore: false }) => void = () => {};
-    vi.mocked(feedApi.feed).mockImplementationOnce(
+    let resolve: (value: { items: RecommendedPost[]; nextCursor: null; hasMore: false }) => void = () => {};
+    vi.mocked(recommendationApi.feed).mockImplementationOnce(
       () =>
         new Promise((done) => {
           resolve = done;
@@ -133,15 +154,19 @@ describe('home feed', () => {
     renderPage();
     expect(screen.getByText('Loading feed…')).toBeTruthy();
     resolve({ items: [], nextCursor: null, hasMore: false });
-    expect(await screen.findByText('No posts yet. Start the professional conversation.')).toBeTruthy();
+    expect(
+      await screen.findByText('No available posts yet. Explore communities or update your feed interests.')
+    ).toBeTruthy();
   });
 
   it('shows a retry state for feed errors', async () => {
-    vi.mocked(feedApi.feed).mockRejectedValueOnce(new Error('offline'));
+    vi.mocked(recommendationApi.feed).mockRejectedValueOnce(new Error('offline'));
     renderPage();
-    expect(await screen.findByText('Could not load the feed.')).toBeTruthy();
+    expect(await screen.findByText('The feed could not be loaded.')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
-    expect(await screen.findByText('No posts yet. Start the professional conversation.')).toBeTruthy();
+    expect(
+      await screen.findByText('No available posts yet. Explore communities or update your feed interests.')
+    ).toBeTruthy();
   });
 
   it('creates a post and rejects an empty draft', async () => {

@@ -16,6 +16,7 @@ import Community, { type CommunityRecord } from '../model/Community.js';
 import CommunityMembership, {
   type CommunityMembershipRecord
 } from '../../memberships/model/CommunityMembership.js';
+import { queueNotification } from '../../notifications/service/notificationOutbox.js';
 import { canManageRole, canRemove, permissionsFor, type CommunityAction } from './communityPermissions.js';
 import type {
   CommunityCreate,
@@ -31,6 +32,32 @@ const missing = () => new AppError(404, 'COMMUNITY_NOT_FOUND', 'Community not fo
 const forbidden = () => new AppError(403, 'COMMUNITY_FORBIDDEN', 'You cannot perform this community action.');
 const id = (value: Types.ObjectId | string) => value.toString();
 const objectId = (value: string) => new Types.ObjectId(value);
+async function notifyCommunityManagers(
+  communityId: string,
+  actorId: string,
+  membershipId: string,
+  version: string
+) {
+  const managers = await CommunityMembership.find({
+    communityId: objectId(communityId),
+    status: 'ACTIVE',
+    role: { $in: ['OWNER', 'ADMIN', 'MODERATOR'] }
+  })
+    .select('userId')
+    .lean();
+  await Promise.all(
+    managers.map((manager) =>
+      queueNotification({
+        recipientId: id(manager.userId),
+        actorId,
+        type: 'COMMUNITY_JOIN_REQUEST_RECEIVED',
+        entityType: 'community',
+        entityId: communityId,
+        deduplicationKey: `community:${communityId}:membership:${membershipId}:requested:${version}`
+      })
+    )
+  );
+}
 
 function cursorOf(record: CursorRecord) {
   return Buffer.from(`${record.createdAt.getTime()}:${id(record._id)}`).toString('base64url');
@@ -321,10 +348,25 @@ export async function joinCommunity(communityId: string, userId: string) {
         { new: true, runValidators: true }
       );
       if (updated)
+        if (updated.status === 'PENDING')
+          await notifyCommunityManagers(
+            communityId,
+            userId,
+            updated._id.toString(),
+            updated.updatedAt.toISOString()
+          );
+      if (updated)
         return { membershipStatus: updated.status, role: updated.status === 'ACTIVE' ? updated.role : null };
     } else {
       try {
         const created = await CommunityMembership.create({ communityId, userId, ...change });
+        if (created.status === 'PENDING')
+          await notifyCommunityManagers(
+            communityId,
+            userId,
+            created._id.toString(),
+            created.updatedAt.toISOString()
+          );
         return { membershipStatus: created.status, role: created.status === 'ACTIVE' ? created.role : null };
       } catch (error) {
         if (!duplicateKey(error)) throw error;
@@ -433,6 +475,14 @@ export async function decideRequest(
     { new: true }
   );
   if (!record) throw new AppError(409, 'REQUEST_NOT_PENDING', 'Membership request is no longer pending.');
+  await queueNotification({
+    recipientId: record.userId.toString(),
+    actorId,
+    type: approve ? 'COMMUNITY_MEMBERSHIP_APPROVED' : 'COMMUNITY_MEMBERSHIP_REJECTED',
+    entityType: 'community',
+    entityId: communityId,
+    deduplicationKey: `community:${communityId}:membership:${requestId}:${approve ? 'approved' : 'rejected'}`
+  });
   return { membershipStatus: record.status };
 }
 

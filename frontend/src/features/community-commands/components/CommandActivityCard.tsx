@@ -2,6 +2,7 @@ import type { CommunityActivity } from '@voklance/shared';
 import { Link } from 'react-router';
 import { apiErrorMessage } from '@/lib/apiClient';
 import { useCommandActions } from '../hooks/useCommunityCommands';
+import { displayEventTime } from '@/features/events/utils/zonedDateTime';
 
 function SafeLink({ href, children }: { href: string; children: string }) {
   return (
@@ -61,22 +62,20 @@ export default function CommandActivityCard({ activity }: { activity: CommunityA
             <dl>
               <div>
                 <dt>Starts</dt>
-                <dd>{new Date(activity.payload.startAt).toLocaleString()}</dd>
+                <dd>{displayEventTime(activity.payload.startAt, activity.payload.timezone ?? 'UTC')}</dd>
               </div>
               {activity.payload.endAt && (
                 <div>
                   <dt>Ends</dt>
-                  <dd>{new Date(activity.payload.endAt).toLocaleString()}</dd>
+                  <dd>{displayEventTime(activity.payload.endAt, activity.payload.timezone ?? 'UTC')}</dd>
                 </div>
               )}
               <div>
                 <dt>Location</dt>
                 <dd>
-                  {activity.payload.locationType === 'online' ? (
-                    <SafeLink href={activity.payload.locationOrUrl}>Open event location</SafeLink>
-                  ) : (
-                    activity.payload.locationOrUrl
-                  )}
+                  {activity.payload.locationType === 'online'
+                    ? 'Online · link available to confirmed participants'
+                    : activity.payload.locationOrUrl}
                 </dd>
               </div>
             </dl>
@@ -90,16 +89,14 @@ export default function CommandActivityCard({ activity }: { activity: CommunityA
             <dl>
               <div>
                 <dt>Scheduled</dt>
-                <dd>{new Date(activity.payload.scheduledAt).toLocaleString()}</dd>
+                <dd>{displayEventTime(activity.payload.scheduledAt, activity.payload.timezone ?? 'UTC')}</dd>
               </div>
               <div>
                 <dt>Location</dt>
                 <dd>
-                  {activity.payload.locationType === 'online' ? (
-                    <SafeLink href={activity.payload.locationOrUrl}>Open meetup location</SafeLink>
-                  ) : (
-                    activity.payload.locationOrUrl
-                  )}
+                  {activity.payload.locationType === 'online'
+                    ? 'Online · link available to confirmed participants'
+                    : activity.payload.locationOrUrl}
                 </dd>
               </div>
               {activity.payload.capacity && (
@@ -110,6 +107,15 @@ export default function CommandActivityCard({ activity }: { activity: CommunityA
               )}
             </dl>
             <p>{activity.payload.description}</p>
+          </>
+        );
+      case 'resource':
+        return (
+          <>
+            <h3>{activity.payload.title}</h3>
+            <p>{activity.payload.description}</p>
+            <p>{activity.payload.category.replaceAll('-', ' ')}</p>
+            {activity.payload.tags.length > 0 && <p>Topics: {activity.payload.tags.join(', ')}</p>}
           </>
         );
     }
@@ -134,19 +140,49 @@ export default function CommandActivityCard({ activity }: { activity: CommunityA
         <span className="command-activity-type">{activity.commandLabel}</span>
       </header>
       <div className="command-activity-content">{details}</div>
-      {(activity.command === 'referral' || activity.command === 'needreferral') && <div className="referral-card-links"><span className="referral-status" data-status={activity.referralStatus?.toLowerCase()}>{activity.referralStatus?.toLowerCase() ?? 'open'}</span><Link to={activity.command === 'referral' ? `/app/referrals/opportunities/${activity.id}` : `/app/referrals/needs/${activity.id}`}>{activity.command === 'referral' ? 'Request referral or view details' : 'Offer referral or view details'}</Link></div>}
-      {activity.canDelete && activity.command !== 'referral' && activity.command !== 'needreferral' && (
-        <button
-          type="button"
-          className="community-text-button"
-          disabled={remove.isPending}
-          onClick={() => {
-            if (window.confirm('Delete this activity?')) remove.mutate(activity.id);
-          }}
-        >
-          {remove.isPending ? 'Deleting…' : 'Delete activity'}
-        </button>
+      {(activity.command === 'referral' || activity.command === 'needreferral') && (
+        <div className="referral-card-links">
+          <span className="referral-status" data-status={activity.referralStatus?.toLowerCase()}>
+            {activity.referralStatus?.toLowerCase() ?? 'open'}
+          </span>
+          <Link
+            to={
+              activity.command === 'referral'
+                ? `/app/referrals/opportunities/${activity.id}`
+                : `/app/referrals/needs/${activity.id}`
+            }
+          >
+            {activity.command === 'referral'
+              ? 'Request referral or view details'
+              : 'Offer referral or view details'}
+          </Link>
+        </div>
       )}
+      {(activity.command === 'event' || activity.command === 'meetup') && activity.eventId && (
+        <div className="referral-card-links">
+          <span role="status">{activity.eventStatus ?? 'scheduled'}</span>
+          <Link to={`/app/events/${activity.eventId}`}>View {activity.command} details</Link>
+        </div>
+      )}
+      {activity.command === 'resource' && activity.resourceId && (
+        <Link to={`/app/resources/${activity.resourceId}`}>View resource</Link>
+      )}
+      {activity.canDelete &&
+        activity.command !== 'referral' &&
+        activity.command !== 'needreferral' &&
+        activity.command !== 'resource' &&
+        !activity.eventId && (
+          <button
+            type="button"
+            className="community-text-button"
+            disabled={remove.isPending}
+            onClick={() => {
+              if (window.confirm('Delete this activity?')) remove.mutate(activity.id);
+            }}
+          >
+            {remove.isPending ? 'Deleting…' : 'Delete activity'}
+          </button>
+        )}
       {remove.isError && (
         <p className="command-error" role="alert">
           {apiErrorMessage(remove.error)}

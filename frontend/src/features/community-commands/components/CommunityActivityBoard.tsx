@@ -6,6 +6,7 @@ import CommunityCommandPicker from './CommunityCommandPicker';
 import CommandForm from './CommandForm';
 import CommandActivityCard from './CommandActivityCard';
 import type { CommandMetadata } from '@voklance/shared';
+import ResourceCommandForm from '@/features/resources/components/ResourceCommandForm';
 
 export default function CommunityActivityBoard({ community }: { community: CommunityDetail }) {
   const [selected, setSelected] = useState<CommandMetadata | null>(null);
@@ -37,6 +38,8 @@ export default function CommunityActivityBoard({ community }: { community: Commu
             </p>
           ) : commands.data.commands.length === 0 ? (
             <p>No commands are available here.</p>
+          ) : selected?.id === 'resource' ? (
+            <ResourceCommandForm onCancel={() => setSelected(null)} />
           ) : selected ? (
             <CommandForm
               key={selected.id}

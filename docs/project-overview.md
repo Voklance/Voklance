@@ -1,12 +1,12 @@
 # Voklance project overview
 
-_Repository snapshot: 15 November 2026. This document describes implemented code and explicitly separates planned product ideas from working features._
+_Repository snapshot: 16 November 2026. This document describes implemented code and explicitly separates planned product ideas from working features._
 
 ## 1. What Voklance is
 
 Voklance is being built as a professional networking platform with purposeful professional communities at its center. The product vision includes professional profiles, a feed, community discovery, resource sharing, career opportunities, events, and structured community actions. A community action is intended to have its own workflow and permission rules; it is not an unrestricted group chat message.
 
-The current repository contains a working account flow, professional feed, community discovery and membership, and initial structured command activities. It does **not** yet contain document sharing, referral fulfillment, event registration, or meetup attendance.
+The current repository contains a working account flow, professional feed, community discovery and membership, and initial structured command activities. It does **not** yet contain working document uploads, publication, downloads, or attendance check-in. Referral fulfillment, event registration, and meetup RSVP are implemented.
 
 > The earlier product brief mentioned Next.js. The application currently in this repository uses **React with Vite**. This document reflects the code that exists now.
 
@@ -253,7 +253,7 @@ The root URL resolves access through `/auth/me`. Guests go to `/login`; new unve
 | `/app/professionals/:username`    | Completed onboarding | Published professional profile                         |
 | `/account`                        | Redirect             | Completed users reach the appropriate `/app` page      |
 
-The signed-in shell uses a top bar, left navigation, main content area, and right sidebar. Home, Communities, and Profile are working navigation destinations. Opportunities, Events, global search, and notifications are visible as unavailable placeholders. Saved posts is a working route. The right sidebar shows saved profile information and joined communities from the API. The layout adapts from three columns on desktop to a compact layout on narrower screens.
+The signed-in shell uses a top bar, left navigation, main content area, and right sidebar. Home, Communities, and Profile are working navigation destinations. Opportunities, global search, and notifications remain unavailable placeholders. Events is a working route. Saved posts is a working route. The right sidebar shows saved profile information and joined communities from the API. The layout adapts from three columns on desktop to a compact layout on narrower screens.
 
 The visual system has a Voklance wordmark, an account page design, CSS color and spacing tokens, and a responsive dashboard. A dark token set exists under `[data-theme="dark"]`; no theme toggle is implemented. The starter page was removed in favor of the login page. Loading, retryable error, and global error boundary components are available.
 
@@ -307,7 +307,7 @@ Phase 01 Milestone 2 defined additional Mongoose models. Milestone 3 exposes the
 
 The skill and interest seed data is explicit and idempotent. Run `npm run seed:catalogs -w backend` only when you want to insert missing catalog entries into the configured database; startup does not seed automatically. Avatar storage is not configured, so the optional `avatarUrl` model field does not imply that uploads work.
 
-`Community` and `CommunityMembership` collections store professional communities, membership status, and roles. Unique slug, membership pair, and active-owner indexes protect their invariants. `CommunityActivity` stores validated, versioned command payloads with community/status/time, community/status/type/time, and author/time indexes. The command registry is code, not a MongoDB collection. Referral fulfillment, event registration, resources, and notifications are not implemented.
+`Community` and `CommunityMembership` collections store professional communities, membership status, and roles. Unique slug, membership pair, and active-owner indexes protect their invariants. `CommunityActivity` stores validated, versioned command payloads with community/status/time, community/status/type/time, and author/time indexes. The command registry is code, not a MongoDB collection. Referral fulfillment and event registration are implemented. Resource metadata, read APIs, and moderation are implemented as a foundation; uploads and publication remain blocked. Notifications are unimplemented.
 
 ## 8. Configuration and local setup
 
@@ -341,13 +341,13 @@ Current automated tests cover shared contracts, health and auth compatibility, f
 ## 10. Planned work and open product decisions
 
 - Profile picture upload is unavailable until a secure upload endpoint is approved.
-- Public professional profiles are available by username after the owner publishes their profile; search and broader professional discovery are not implemented.
+- Published professional profiles can be found through authenticated professional discovery with name, headline, skill, and location filters.
 - Email verification is implemented for new accounts. Production SMTP delivery and a legacy-account enforcement rollout remain open; password recovery is not implemented.
 - The chronological text feed is implemented; ranking, public discovery, attachments, and moderation are not implemented.
 - Community creation, discovery, membership, roles, settings, and ownership transfer are implemented. Transfer requires a MongoDB replica set.
-- `/referral`, `/needreferral`, `/event`, and `/meetup` publish structured community activities. Fulfillment, applications, registration, and attendance remain future workflows.
-- Resource upload rules, supported file types, storage, scanning, membership checks, and download permissions remain to be defined.
-- Global search, notifications, opportunities, and events pages are placeholders. Community search and saved posts are working routes.
+- `/referral`, `/needreferral`, `/event`, and `/meetup` publish structured community activities. Referral responses, event registration, and meetup RSVP are implemented; attendance check-in remains future work.
+- Resource types, size policy, membership checks, and download permissions are defined. Approved private storage, scanning, and actual uploads/downloads remain blocked.
+- Global search, notifications, and opportunities remain placeholders. Community search, saved posts, and events are working routes.
 - A dark theme toggle is not implemented, although dark CSS tokens are prepared.
 
 These gaps are intentional: the product context describes direction, not complete behavior specifications. Future community actions should use backend-enforced permissions and distinct workflows, while ordinary feed posts remain a separate concept.
@@ -376,4 +376,40 @@ The Communities route now loads real MongoDB-backed discovery results with searc
 
 ## 16. Milestone 11 structured community activities
 
-The community detail page now has a command picker, four validated forms, filters, paginated activity cards, and delete controls for authors and authorized managers. Commands come from a backend registry with metadata, permissions, a versioned shared Zod payload schema, and a display type. The initial types are referral opportunity, referral request, event announcement, and meetup announcement. They create informational activity records; no referral processing, RSVP, registration, or attendance occurs. Private activity is visible only to active members. Public activity is readable to authenticated users who completed onboarding. The API derives author identity from the session, enforces the command allowlist and active membership, and soft-deletes activities by clearing their payload. The slash picker has no arbitrary message submission path. These commands are application actions, not shell commands.
+Milestone 11 introduced the command picker, four validated forms, filters, and paginated activity cards. At that milestone, the event and meetup commands created informational announcements only. Milestone 13 links them to managed gatherings with registration and RSVP. Private activity is visible only to active members. Public activity is readable to authenticated users who completed onboarding. The API derives author identity from the session and enforces the command allowlist and active membership. The slash picker has no arbitrary message submission path. These commands are application actions, not shell commands.
+
+## 18. Milestone 13 professional events and meetups
+
+Active community members create events and meetups through the existing `/event` and `/meetup` command forms. Each command creates a linked activity and managed event record. `/app/events` provides discovery and personal views; event details support registration or RSVP, and organizers can edit, cancel, and inspect a privacy restricted attendee directory. Community detail shows upcoming gatherings and links its event activity cards to details. Capacity is enforced through transactional counters. Online meeting links are limited to confirmed participants and managers. Event writes require a MongoDB replica set; standalone MongoDB returns a clear 503 rather than attempting an unsafe multi-document write. See [api.md](api.md) and [architecture.md](architecture.md) for the routes, indexes, time-zone handling, and access policy.
+
+## 19. Milestone 14 community resource foundation
+
+`/resource` appears in the structured community action picker. Its form collects metadata and validates a locally selected document's declared MIME, extension, and size, but does not upload or publish it. The repository has no approved private object storage or malware scanner, so the backend refuses upload and publication with `503 RESOURCE_STORAGE_UNAVAILABLE`. The new resource models, shared contracts, safe metadata discovery/detail APIs, report and moderation APIs, and `/app/resources`, `/app/resources/:resourceId`, and `/app/communities/:slug/resources` pages are implemented. Tests seed metadata in an ephemeral MongoDB replica set to verify access rules, filters, editing, reporting, moderation, and API denial without touching production storage. Document content, secure downloads, inline PDF preview, and Office conversion remain blocked until a storage provider and security policy are approved. See [api.md](api.md) and [architecture.md](architecture.md).
+
+## 20. Milestone 15 professional networking
+
+`/app/network` shows accepted connections, received and sent requests, counts, search, and network privacy settings. `/app/network/discover` finds published, discoverable professionals by name, headline, skill, or location. Published professional profiles include connection controls and show counts and lists only when the profile owner's setting permits them. Requests can be accepted, declined, cancelled, and accepted relationships removed. One canonical pair record prevents reciprocal duplicates. Professional connections remain independent of community memberships and grant no community access. Private messaging, notifications, recommendations, contact import, and general community chat remain outside this milestone.
+
+## 21. Milestone 16 private professional messaging
+
+Accepted professional connections can create one private conversation per pair and exchange persistent plain-text messages at `/app/messages`. The app now has an authenticated Socket.IO connection on the existing API server for delivery, acknowledgements, typing, presence, read updates, unread counts, and short in-app message notices. REST supplies conversation creation and search, history, settings, block controls, and reporting. MongoDB indexes enforce pair uniqueness, sender UUID idempotency, message history order, and per-person state. The current session cookie authenticates sockets, and each operation rechecks connection and block permissions. Blocking or removing a connection revokes access. Read receipts are opt-in; presence is visible only to eligible connections and can be hidden. Muting suppresses message notices while preserving delivery and unread counts. Published profiles and My Network provide a Message action for connected people. The community slash-command board remains a separate structured workflow. See [api.md](api.md) and [architecture.md](architecture.md) for the event contract, access checks, and deployment limits.
+
+## 22. Milestone 17 notification center
+
+The top bar bell, `/app/notifications`, and `/app/notifications/settings` use persisted per-user notifications with cursor pages, category and unread filters, read controls, and preferences. Authenticated Socket.IO user rooms publish new notifications and unread counts; reconnect reconciles through REST. Controlled templates and structured internal targets avoid arbitrary HTML and redirects. Existing connection, referral, event/meetup, private community, post, and message services now enqueue notification events; the outbox retries transient processing failures. Resource publication is still storage-gated, so no resource publication notification fires. See [api.md](api.md) and [architecture.md](architecture.md) for endpoint and atomicity details.
+
+## 23. Milestone 18 GitHub portfolio
+
+`/app/github` lets the owner connect a GitHub identity through session-bound OAuth, sync public repositories, select featured projects, and disconnect. The callback revokes its temporary authorization; the app stores no GitHub token. GitHub's public API supplies repository metadata. Published profiles show only available featured repositories. Configure the backend OAuth environment values to enable connection. Public API rate limits and the 500-repository per-run cap bound sync. See [api.md](api.md) and [architecture.md](architecture.md).
+
+## 24. Milestone 19 unified search
+
+The top navigation now offers debounced, permission-aware suggestions. `/app/search` has an All preview and category pages for people, communities, posts, events, referrals, published resources, and imported public GitHub projects. Category filters, recent sorting, paginated results, local recent search history, and direct post navigation are available. MongoDB text indexes and a 250-candidate window bound each category query; matches beyond that window may be absent. Private community content requires active membership and blocked or inactive people are excluded. See [api.md](api.md) and [architecture.md](architecture.md).
+
+## 25. Milestone 20 personalized discovery
+
+Home now offers For You, Following, and Recent post feeds while preserving the composer and post interactions. Rule-based ranking uses explicit professional interests, skills, accepted connections, and post age, then applies privacy, block, feedback, and author-diversity checks. Members can hide posts, mark them uninteresting, dismiss suggestions, and edit topic preferences at `/app/settings/feed`. A sidebar and category pages recommend public professionals, communities, events, published resources, and open referral opportunities with reasons. Candidate windows are bounded and ranking is deterministic; no machine learning or sensitive profile inference is used. See [api.md](api.md) and [architecture.md](architecture.md).
+
+## 26. Milestone 22 settings, security, and privacy
+
+`/app/settings` now groups account, password and sessions, privacy, blocked users, notification preferences, feed interests, and personal data export. Forgot/reset password, signed-in email change, and password-based reactivation use the existing account and session system. Session version increments immediately invalidate old cookies after sensitive changes. A bounded, password-protected JSON export contains the member's own data without password or token material. Permanent deletion is gated with a clear 503 and UI explanation until a durable cross-module cleanup and retention policy exists; deactivation is available. See [api.md](api.md) and [architecture.md](architecture.md).

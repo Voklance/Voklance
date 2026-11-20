@@ -14,6 +14,10 @@ import Profile from '../../profiles/model/Profile.js';
 import User from '../../users/model/User.js';
 import ReferralApplication from '../../referrals/model/ReferralApplication.js';
 import ReferralOffer from '../../referrals/model/ReferralOffer.js';
+import ProfessionalEvent from '../../events/model/ProfessionalEvent.js';
+import { createFromCommand } from '../../events/service/eventService.js';
+import CommunityResource from '../../resources/model/CommunityResource.js';
+import StoredFile from '../../resources/model/StoredFile.js';
 import CommunityActivityModel, { type CommunityActivityRecord } from '../model/CommunityActivity.js';
 import { commandDefinitions, findCommand, metadataFor } from '../registry/commandRegistry.js';
 import type { ActivityQuery, SubmissionInput } from '../validation/commandSchemas.js';
@@ -73,13 +77,62 @@ export async function safeAuthorsFor(ids: Types.ObjectId[]) {
   );
 }
 export async function activityDtos(records: ActivityRecord[], viewerId: string, canModerate: boolean) {
-  const authors = await safeAuthorsFor(records.map((record) => record.authorId));
+  const [authors, events, resources] = await Promise.all([
+    safeAuthorsFor(records.map((record) => record.authorId)),
+    ProfessionalEvent.find({
+      activityId: {
+        $in: records
+          .filter((record) => record.commandType === 'event' || record.commandType === 'meetup')
+          .map((record) => record._id)
+      }
+    })
+      .select('activityId status endAt')
+      .lean(),
+    CommunityResource.find({
+      activityId: {
+        $in: records.filter((record) => record.commandType === 'resource').map((record) => record._id)
+      }
+    })
+      .select('activityId fileId status')
+      .lean()
+  ]);
+  const eventByActivity = new Map(events.map((event) => [id(event.activityId), event]));
+  const resourceByActivity = new Map(resources.map((resource) => [id(resource.activityId), resource]));
+  const cleanFiles = new Set(
+    (
+      await StoredFile.find({
+        _id: { $in: resources.map((resource) => resource.fileId) },
+        status: 'attached',
+        scanStatus: 'clean'
+      })
+        .select('_id')
+        .lean()
+    ).map((file) => id(file._id))
+  );
   return records.flatMap((record) => {
     const definition = findCommand(record.commandType);
     const author = authors.get(id(record.authorId));
     const parsed = definition?.schema.safeParse(record.payload);
     if (!definition || !author || !parsed?.success || record.payloadVersion !== definition.payloadVersion)
       return [];
+    const linkedEvent = eventByActivity.get(id(record._id));
+    const linkedResource = resourceByActivity.get(id(record._id));
+    if (
+      record.commandType === 'resource' &&
+      (linkedResource?.status !== 'published' || !cleanFiles.has(id(linkedResource.fileId)))
+    )
+      return [];
+    const payload =
+      record.commandType === 'event' || record.commandType === 'meetup'
+        ? {
+            ...(parsed.data as Record<string, unknown>),
+            locationOrUrl:
+              record.payload && 'locationType' in record.payload && record.payload.locationType === 'online'
+                ? 'Online · link available to confirmed participants'
+                : (parsed.data as { locationOrUrl: string }).locationOrUrl,
+            onlineUrl: undefined
+          }
+        : parsed.data;
     return [
       {
         id: id(record._id),
@@ -88,16 +141,29 @@ export async function activityDtos(records: ActivityRecord[], viewerId: string, 
         command: record.commandType,
         commandLabel: definition.label,
         payloadVersion: 1 as const,
-        payload: parsed.data as CommandPayload,
+        payload: payload as CommandPayload,
+        eventId: linkedEvent ? id(linkedEvent._id) : undefined,
+        resourceId: linkedResource ? id(linkedResource._id) : undefined,
+        eventStatus:
+          linkedEvent?.status === 'scheduled' && linkedEvent.endAt <= new Date()
+            ? 'completed'
+            : linkedEvent?.status,
         createdAt: record.createdAt.toISOString(),
         ownedByMe: id(record.authorId) === viewerId,
         canDelete: canModerate || id(record.authorId) === viewerId,
-        referralStatus: record.commandType === 'referral'
-          ? (record.referralStatus === 'CLOSED' ? 'CLOSED' :
-              record.payload && 'expiresAt' in record.payload && record.payload.expiresAt && Date.parse(record.payload.expiresAt) <= Date.now() ? 'EXPIRED' : 'OPEN')
-          : record.commandType === 'needreferral'
-            ? (record.referralStatus ?? 'OPEN')
-            : undefined
+        referralStatus:
+          record.commandType === 'referral'
+            ? record.referralStatus === 'CLOSED'
+              ? 'CLOSED'
+              : record.payload &&
+                  'expiresAt' in record.payload &&
+                  record.payload.expiresAt &&
+                  Date.parse(record.payload.expiresAt) <= Date.now()
+                ? 'EXPIRED'
+                : 'OPEN'
+            : record.commandType === 'needreferral'
+              ? (record.referralStatus ?? 'OPEN')
+              : undefined
       } as CommunityActivity
     ];
   });
@@ -143,14 +209,29 @@ export async function submitCommand(
     if (expiresAt && Date.parse(expiresAt) <= Date.now())
       throw new AppError(400, 'COMMAND_PAYLOAD_INVALID', 'Expiration must be in the future.');
   }
-  const record = await CommunityActivityModel.create({
-    communityId,
-    authorId: userId,
-    commandType: definition.id,
-    payloadVersion: definition.payloadVersion,
-    payload: parsed.data,
-    status: 'ACTIVE'
-  });
+  if (definition.id === 'resource')
+    throw new AppError(
+      503,
+      'RESOURCE_STORAGE_UNAVAILABLE',
+      'Resource publication requires approved private storage and scanning.'
+    );
+  const record =
+    definition.id === 'event' || definition.id === 'meetup'
+      ? await createFromCommand(
+          communityId,
+          userId,
+          definition.id,
+          parsed.data as import('@voklance/shared').EventPayload | import('@voklance/shared').MeetupPayload,
+          input.idempotencyKey
+        )
+      : await CommunityActivityModel.create({
+          communityId,
+          authorId: userId,
+          commandType: definition.id,
+          payloadVersion: definition.payloadVersion,
+          payload: parsed.data,
+          status: 'ACTIVE'
+        });
   const [activity] = await activityDtos(
     [record],
     userId,
@@ -221,6 +302,10 @@ export async function deleteActivity(communityId: string, activityId: string, us
   ]);
   if (applications || offers)
     throw new AppError(409, 'REFERRAL_HAS_RESPONSES', 'Close this referral instead of deleting it.');
+  if (await ProfessionalEvent.exists({ activityId }))
+    throw new AppError(409, 'EVENT_HAS_WORKFLOW', 'Cancel this event instead of deleting its activity.');
+  if (await CommunityResource.exists({ activityId }))
+    throw new AppError(409, 'RESOURCE_HAS_WORKFLOW', 'Delete this resource through its resource controls.');
   const removed = await CommunityActivityModel.findOneAndUpdate(
     { _id: activityId, communityId, status: 'ACTIVE' },
     { $set: { status: 'DELETED', payload: null, deletedAt: new Date() } },

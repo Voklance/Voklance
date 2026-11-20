@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router';
 import { apiErrorMessage } from '@/lib/apiClient';
 import { useCommunity, useCommunityActions } from '../hooks/useCommunities';
 import CommunityActivityBoard from '@/features/community-commands/components/CommunityActivityBoard';
+import CommunityEventsBoard from '@/features/events/components/CommunityEventsBoard';
 import CommunityReferralBoard from '@/features/referrals/components/CommunityReferralBoard';
 
 export default function CommunityDetailPage() {
@@ -142,6 +143,12 @@ export default function CommunityDetailPage() {
         </nav>
       )}
       {!privatePreview && <CommunityReferralBoard communityId={community.id} />}
+      {!privatePreview && (
+        <Link className="community-action" to={`/app/communities/${slug}/resources`}>
+          Browse community resources
+        </Link>
+      )}
+      {!privatePreview && <CommunityEventsBoard communityId={community.id} />}
       {!privatePreview && <CommunityActivityBoard community={community} />}
     </div>
   );

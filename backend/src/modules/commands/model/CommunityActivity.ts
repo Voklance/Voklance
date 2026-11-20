@@ -8,6 +8,7 @@ export interface CommunityActivityRecord {
   commandType: CommandId;
   payloadVersion: number;
   payload: CommandPayload | null;
+  idempotencyKey?: string;
   referralStatus?: 'OPEN' | 'CLOSED' | 'FULFILLED';
   status: 'ACTIVE' | 'DELETED';
   deletedAt?: Date | null;
@@ -21,6 +22,7 @@ const schema = new Schema<CommunityActivityRecord>(
     authorId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     commandType: { type: String, enum: [...COMMAND_IDS], required: true },
     payloadVersion: { type: Number, required: true, min: 1 },
+    idempotencyKey: { type: String },
     payload: {
       type: Schema.Types.Mixed,
       required: function (this: CommunityActivityRecord) {
@@ -54,4 +56,14 @@ const schema = new Schema<CommunityActivityRecord>(
 schema.index({ communityId: 1, status: 1, createdAt: -1, _id: -1 });
 schema.index({ communityId: 1, status: 1, commandType: 1, createdAt: -1, _id: -1 });
 schema.index({ authorId: 1, createdAt: -1, _id: -1 });
+schema.index({
+  'payload.jobTitle': 'text',
+  'payload.company': 'text',
+  'payload.description': 'text',
+  'payload.message': 'text'
+});
+schema.index(
+  { communityId: 1, authorId: 1, idempotencyKey: 1 },
+  { unique: true, partialFilterExpression: { idempotencyKey: { $type: 'string' } } }
+);
 export default mongoose.model<CommunityActivityRecord>('CommunityActivity', schema);

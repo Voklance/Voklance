@@ -8,6 +8,7 @@ export const submissionBody = z
   .object({
     command: z.string().regex(/^[a-z]{1,30}$/),
     payloadVersion: z.number().int(),
+    idempotencyKey: z.uuid().optional(),
     payload: z.unknown()
   })
   .strict();

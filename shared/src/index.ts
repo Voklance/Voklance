@@ -1,6 +1,17 @@
 export const API_V1_PREFIX = '/api/v1';
 export * from './communityCommands.js';
 export * from './referrals.js';
+export * from './events.js';
+export * from './resources.js';
+export * from './connections.js';
+export * from './messaging.js';
+export * from './notifications.js';
+export * from './github.js';
+export * from './search.js';
+export * from './recommendations.js';
+export * from './bookmarks.js';
+export * from './portfolio.js';
+import type { ProfileCertification, ProfileProject, ProfileSectionId } from './portfolio.js';
 export const POST_CONTENT_LIMIT = 3000;
 export const COMMENT_CONTENT_LIMIT = 1000;
 export const COMMUNITY_CATEGORIES = [
@@ -164,6 +175,7 @@ export interface ProfessionalProfile {
   portfolioUrl?: string | null;
   websiteUrl?: string | null;
   visibility?: ProfileVisibility;
+  sectionOrder?: ProfileSectionId[];
 }
 
 export interface PublicProfileResponseData {
@@ -171,6 +183,8 @@ export interface PublicProfileResponseData {
   skills: CatalogItem[];
   experiences: ProfessionalExperience[];
   education: Education[];
+  certifications?: ProfileCertification[];
+  projects?: ProfileProject[];
 }
 
 export interface CatalogItem {
@@ -226,7 +240,15 @@ export interface ProfileResponseData {
 export type ProfilePatchRequest = Partial<
   Pick<
     ProfessionalProfile,
-    'username' | 'fullName' | 'headline' | 'country' | 'city' | 'bio' | 'professionalStatus' | 'visibility'
+    | 'username'
+    | 'fullName'
+    | 'headline'
+    | 'country'
+    | 'city'
+    | 'bio'
+    | 'professionalStatus'
+    | 'visibility'
+    | 'sectionOrder'
   >
 > & { githubUrl?: string | null; portfolioUrl?: string | null; websiteUrl?: string | null };
 

@@ -12,14 +12,17 @@ export interface ReferralOfferRecord {
   updatedAt: Date;
 }
 
-const schema = new Schema<ReferralOfferRecord>({
-  needId: { type: Schema.Types.ObjectId, ref: 'CommunityActivity', required: true },
-  offeredBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-  introduction: { type: String, trim: true, required: true, minlength: 20, maxlength: 1000 },
-  offerDetails: { type: String, trim: true, required: true, minlength: 20, maxlength: 1000 },
-  employerRelationship: { type: String, trim: true, maxlength: 250, default: null },
-  status: { type: String, enum: [...offerStatuses], required: true, default: 'OFFERED' }
-}, { timestamps: true });
+const schema = new Schema<ReferralOfferRecord>(
+  {
+    needId: { type: Schema.Types.ObjectId, ref: 'CommunityActivity', required: true },
+    offeredBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    introduction: { type: String, trim: true, required: true, minlength: 20, maxlength: 1000 },
+    offerDetails: { type: String, trim: true, required: true, minlength: 20, maxlength: 1000 },
+    employerRelationship: { type: String, trim: true, maxlength: 250, default: null },
+    status: { type: String, enum: [...offerStatuses], required: true, default: 'OFFERED' }
+  },
+  { timestamps: true }
+);
 schema.index({ needId: 1, offeredBy: 1 }, { unique: true });
 schema.index({ needId: 1, createdAt: -1, _id: -1 });
 schema.index({ offeredBy: 1, createdAt: -1, _id: -1 });

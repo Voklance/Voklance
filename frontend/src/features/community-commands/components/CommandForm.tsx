@@ -7,6 +7,7 @@ import {
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { apiErrorMessage } from '@/lib/apiClient';
 import { useCommandActions } from '../hooks/useCommunityCommands';
+import { zonedDateTime } from '@/features/events/utils/zonedDateTime';
 
 type Field = {
   name: string;
@@ -27,6 +28,7 @@ const locationTypes = [
   { value: 'hybrid', label: 'Hybrid' }
 ];
 const fields: Record<CommandId, Field[]> = {
+  resource: [],
   referral: [
     { name: 'jobTitle', label: 'Job title', type: 'text', required: true, max: 120 },
     { name: 'company', label: 'Company', type: 'text', required: true, max: 120 },
@@ -59,18 +61,33 @@ const fields: Record<CommandId, Field[]> = {
   ],
   event: [
     { name: 'title', label: 'Event title', type: 'text', required: true, max: 160 },
+    { name: 'category', label: 'Category', type: 'text', max: 80 },
     { name: 'description', label: 'Event details', type: 'textarea', required: true, max: 2000 },
     { name: 'startAt', label: 'Starts at', type: 'datetime-local', required: true },
     { name: 'endAt', label: 'Ends at', type: 'datetime-local' },
+    { name: 'timezone', label: 'IANA time zone', type: 'text', required: true, max: 100 },
     { name: 'locationType', label: 'Location type', type: 'select', required: true, options: locationTypes },
-    { name: 'locationOrUrl', label: 'Location or HTTPS link', type: 'text', required: true, max: 200 }
+    { name: 'locationOrUrl', label: 'Venue or HTTPS link', type: 'text', required: true, max: 200 },
+    { name: 'onlineUrl', label: 'Hybrid online link (HTTPS)', type: 'url', max: 2048 },
+    { name: 'capacity', label: 'Capacity', type: 'number' },
+    {
+      name: 'registrationOpen',
+      label: 'Registration',
+      type: 'select',
+      options: [
+        { value: 'true', label: 'Open' },
+        { value: 'false', label: 'Closed' }
+      ]
+    }
   ],
   meetup: [
     { name: 'title', label: 'Meetup title', type: 'text', required: true, max: 160 },
     { name: 'description', label: 'Meetup details', type: 'textarea', required: true, max: 2000 },
     { name: 'scheduledAt', label: 'Scheduled for', type: 'datetime-local', required: true },
+    { name: 'timezone', label: 'IANA time zone', type: 'text', required: true, max: 100 },
     { name: 'locationType', label: 'Location type', type: 'select', required: true, options: locationTypes },
-    { name: 'locationOrUrl', label: 'Location or HTTPS link', type: 'text', required: true, max: 200 },
+    { name: 'locationOrUrl', label: 'Venue or HTTPS link', type: 'text', required: true, max: 200 },
+    { name: 'onlineUrl', label: 'Hybrid online link (HTTPS)', type: 'url', max: 2048 },
     { name: 'capacity', label: 'Capacity', type: 'number' }
   ]
 };
@@ -87,7 +104,10 @@ export default function CommandForm({
   onSuccess: () => void;
 }) {
   const first = useRef<HTMLInputElement>(null);
-  const [values, setValues] = useState<Record<string, string>>({});
+  const [values, setValues] = useState<Record<string, string>>({
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+  });
+  const idempotencyKey = useRef(crypto.randomUUID());
   const [errors, setErrors] = useState<Record<string, string>>({});
   const { submit } = useCommandActions(communityId);
   useEffect(() => first.current?.focus(), [command.id]);
@@ -98,11 +118,24 @@ export default function CommandForm({
       const value = values[field.name]?.trim() ?? '';
       if (!value && !field.required) continue;
       if (field.type === 'datetime-local') {
-        const date = new Date(value);
-        payload[field.name] = Number.isFinite(date.getTime()) ? date.toISOString() : value;
+        if (command.id === 'event' || command.id === 'meetup') {
+          try {
+            payload[field.name] = zonedDateTime(value, values.timezone || 'UTC');
+          } catch (error) {
+            setErrors({ [field.name]: error instanceof Error ? error.message : 'Invalid time.' });
+            return;
+          }
+        } else {
+          const date = new Date(value);
+          payload[field.name] = Number.isFinite(date.getTime()) ? date.toISOString() : value;
+        }
       } else if (field.name === 'requiredSkills' || field.name === 'skills')
-        payload[field.name] = value.split(',').map((item) => item.trim()).filter(Boolean);
+        payload[field.name] = value
+          .split(',')
+          .map((item) => item.trim())
+          .filter(Boolean);
       else if (field.type === 'number') payload[field.name] = Number(value);
+      else if (field.name === 'registrationOpen') payload[field.name] = value === 'true';
       else payload[field.name] = value;
     }
     const parsed = commandPayloadSchemas[command.id].safeParse(payload);
@@ -117,7 +150,10 @@ export default function CommandForm({
       {
         command: command.id,
         payloadVersion: command.payloadVersion,
-        payload: parsed.data
+        payload: parsed.data,
+        ...(command.id === 'event' || command.id === 'meetup'
+          ? { idempotencyKey: idempotencyKey.current }
+          : {})
       } as CommandSubmission,
       { onSuccess }
     );

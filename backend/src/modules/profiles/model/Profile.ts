@@ -5,6 +5,7 @@ import {
   type ProfessionalStatus,
   type ProfileVisibility
 } from '@voklance/shared';
+import { PROFILE_SECTION_IDS, type ProfileSectionId } from '@voklance/shared';
 import mongoose, { Schema, type Types } from 'mongoose';
 
 export interface ProfileRecord {
@@ -21,6 +22,13 @@ export interface ProfileRecord {
   portfolioUrl?: string | null;
   websiteUrl?: string | null;
   visibility?: ProfileVisibility;
+  profileDiscoverable?: boolean;
+  allowConnectionRequests?: boolean;
+  connectionListVisibility?: 'private' | 'connections';
+  allowDirectMessages?: boolean;
+  showReadReceipts?: boolean;
+  showOnlineStatus?: boolean;
+  sectionOrder?: ProfileSectionId[];
 }
 
 function safeProfessionalUrl(value: string | null | undefined) {
@@ -83,12 +91,30 @@ const profileSchema = new Schema<ProfileRecord>(
       maxlength: 2048,
       validate: { validator: safeProfessionalUrl, message: 'Website URL must use HTTPS.' }
     },
-    visibility: { type: String, enum: [...PROFILE_VISIBILITIES], default: 'PRIVATE' }
+    visibility: { type: String, enum: [...PROFILE_VISIBILITIES], default: 'PRIVATE' },
+    profileDiscoverable: { type: Boolean, default: true },
+    allowConnectionRequests: { type: Boolean, default: true },
+    connectionListVisibility: { type: String, enum: ['private', 'connections'], default: 'private' },
+    allowDirectMessages: { type: Boolean, default: true },
+    showReadReceipts: { type: Boolean, default: false },
+    showOnlineStatus: { type: Boolean, default: true },
+    sectionOrder: {
+      type: [String],
+      enum: [...PROFILE_SECTION_IDS],
+      default: [...PROFILE_SECTION_IDS],
+      validate: {
+        validator: (value: string[]) =>
+          value.length === PROFILE_SECTION_IDS.length && new Set(value).size === PROFILE_SECTION_IDS.length,
+        message: 'Invalid section order.'
+      }
+    }
   },
   { timestamps: true }
 );
 
 profileSchema.index({ userId: 1 }, { unique: true });
 profileSchema.index({ username: 1 }, { unique: true });
+profileSchema.index({ visibility: 1, profileDiscoverable: 1, fullName: 1, _id: 1 });
+profileSchema.index({ fullName: 'text', headline: 'text', bio: 'text', city: 'text', country: 'text' });
 
 export default mongoose.model<ProfileRecord>('Profile', profileSchema);

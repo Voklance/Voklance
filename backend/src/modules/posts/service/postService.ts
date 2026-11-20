@@ -6,7 +6,10 @@ import User from '../../users/model/User.js';
 import Post, { type PostRecord } from '../model/Post.js';
 import PostLike from '../model/PostLike.js';
 import PostBookmark from '../model/PostBookmark.js';
+import Bookmark from '../../bookmarks/model/Bookmark.js';
+import { migrateLegacyPostBookmarks } from '../../bookmarks/service/legacyBookmarkMigration.js';
 import PostComment, { type PostCommentRecord } from '../model/PostComment.js';
+import { queueNotification } from '../../notifications/service/notificationOutbox.js';
 import type { PageQuery } from '../validation/postSchemas.js';
 
 type IdRecord = { _id: Types.ObjectId };
@@ -71,10 +74,17 @@ export async function requirePublishedPost(postId: string) {
   return post;
 }
 
-async function decoratePosts(posts: (PostRecord & IdRecord)[], viewerId: string): Promise<FeedPost[]> {
+export async function getPost(viewerId: string, postId: string): Promise<FeedPost> {
+  const post = await requirePublishedPost(postId);
+  const [decorated] = await decoratePosts([post], viewerId);
+  if (!decorated) throw unavailable();
+  return decorated;
+}
+
+export async function decoratePosts(posts: (PostRecord & IdRecord)[], viewerId: string): Promise<FeedPost[]> {
   if (!posts.length) return [];
   const ids = posts.map((post) => post._id);
-  const [authors, likes, comments, myLikes, myBookmarks] = await Promise.all([
+  const [authors, likes, comments, myLikes, myBookmarks, unifiedBookmarks] = await Promise.all([
     publicAuthors(posts.map((post) => post.authorId)),
     PostLike.aggregate<{ _id: Types.ObjectId; count: number }>([
       { $match: { postId: { $in: ids } } },
@@ -89,12 +99,18 @@ async function decoratePosts(posts: (PostRecord & IdRecord)[], viewerId: string)
       .lean(),
     PostBookmark.find({ postId: { $in: ids }, userId: viewerId })
       .select('postId')
+      .lean(),
+    Bookmark.find({ entityType: 'post', entityId: { $in: ids }, userId: viewerId })
+      .select('entityId')
       .lean()
   ]);
   const likeCounts = new Map(likes.map((item) => [idKey(item._id), item.count]));
   const commentCounts = new Map(comments.map((item) => [idKey(item._id), item.count]));
   const liked = new Set(myLikes.map((item) => idKey(item.postId)));
-  const bookmarked = new Set(myBookmarks.map((item) => idKey(item.postId)));
+  const bookmarked = new Set([
+    ...myBookmarks.map((item) => idKey(item.postId)),
+    ...unifiedBookmarks.map((item) => idKey(item.entityId))
+  ]);
   return posts.flatMap((post) => {
     const author = authors.get(idKey(post.authorId));
     if (!author) return [];
@@ -167,10 +183,23 @@ export async function deletePost(userId: string, postId: string) {
   if (!record) throw unavailable();
 }
 export async function toggleLike(userId: string, postId: string, desired: boolean) {
-  await requirePublishedPost(postId);
+  const post = await requirePublishedPost(postId);
   if (desired) {
     try {
-      await PostLike.updateOne({ postId, userId }, { $setOnInsert: { postId, userId } }, { upsert: true });
+      const result = await PostLike.updateOne(
+        { postId, userId },
+        { $setOnInsert: { postId, userId } },
+        { upsert: true }
+      );
+      if (result.upsertedCount)
+        await queueNotification({
+          recipientId: idKey(post.authorId),
+          actorId: userId,
+          type: 'POST_LIKED',
+          entityType: 'post',
+          entityId: postId,
+          deduplicationKey: `post:${postId}:liked:${userId}`
+        });
     } catch (error) {
       if (!isDuplicateKey(error)) throw error;
     }
@@ -179,17 +208,26 @@ export async function toggleLike(userId: string, postId: string, desired: boolea
 }
 export async function toggleBookmark(userId: string, postId: string, desired: boolean) {
   await requirePublishedPost(postId);
+  await migrateLegacyPostBookmarks(userId);
   if (desired) {
     try {
-      await PostBookmark.updateOne(
-        { postId, userId },
-        { $setOnInsert: { postId, userId } },
+      await Bookmark.updateOne(
+        { entityType: 'post', entityId: postId, userId },
+        { $setOnInsert: { entityType: 'post', entityId: postId, userId } },
         { upsert: true }
       );
     } catch (error) {
       if (!isDuplicateKey(error)) throw error;
     }
-  } else await PostBookmark.deleteOne({ postId, userId });
+  } else {
+    await PostBookmark.deleteOne({ postId, userId });
+    const removed = await Bookmark.findOneAndDelete({ entityType: 'post', entityId: postId, userId });
+    if (removed) {
+      const { default: BookmarkCollectionItem } =
+        await import('../../bookmarks/model/BookmarkCollectionItem.js');
+      await BookmarkCollectionItem.deleteMany({ bookmarkId: removed._id, userId });
+    }
+  }
   return { bookmarkedByMe: desired };
 }
 
@@ -197,18 +235,19 @@ function isDuplicateKey(error: unknown) {
   return !!error && typeof error === 'object' && 'code' in error && error.code === 11000;
 }
 export async function listBookmarks(userId: string, page: PageQuery): Promise<FeedPage> {
+  await migrateLegacyPostBookmarks(userId);
   const cursor = decodeCursor(page.cursor);
-  const records = await PostBookmark.aggregate<{
+  const records = await Bookmark.aggregate<{
     _id: Types.ObjectId;
     createdAt: Date;
     post: PostRecord & IdRecord;
   }>([
-    { $match: { userId: new Types.ObjectId(userId), ...beforeCursor(cursor) } },
+    { $match: { userId: new Types.ObjectId(userId), entityType: 'post', ...beforeCursor(cursor) } },
     { $sort: { createdAt: -1, _id: -1 } },
     {
       $lookup: {
         from: Post.collection.name,
-        localField: 'postId',
+        localField: 'entityId',
         foreignField: '_id',
         pipeline: [{ $match: { status: 'PUBLISHED' } }],
         as: 'post'
@@ -280,8 +319,16 @@ export async function listComments(userId: string, postId: string, page: PageQue
   };
 }
 export async function createComment(userId: string, postId: string, content: string) {
-  await requirePublishedPost(postId);
+  const post = await requirePublishedPost(postId);
   const record = await PostComment.create({ postId, authorId: userId, content });
+  await queueNotification({
+    recipientId: idKey(post.authorId),
+    actorId: userId,
+    type: 'POST_COMMENTED',
+    entityType: 'post',
+    entityId: postId,
+    deduplicationKey: `post:${postId}:comment:${idKey(record._id)}`
+  });
   return (await decorateComments([record], userId))[0];
 }
 export async function editComment(userId: string, postId: string, commentId: string, content: string) {

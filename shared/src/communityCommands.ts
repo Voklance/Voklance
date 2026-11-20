@@ -1,12 +1,14 @@
 import { z } from 'zod';
+import { RESOURCE_CATEGORIES } from './resources.js';
 
-export const COMMAND_IDS = ['referral', 'needreferral', 'event', 'meetup'] as const;
+export const COMMAND_IDS = ['referral', 'needreferral', 'event', 'meetup', 'resource'] as const;
 export type CommandId = (typeof COMMAND_IDS)[number];
 export const COMMAND_LABELS: Record<CommandId, string> = {
   referral: 'Referral opportunity',
   needreferral: 'Referral request',
   event: 'Professional event',
-  meetup: 'Professional meetup'
+  meetup: 'Professional meetup',
+  resource: 'Share resource'
 };
 export const COMMAND_ERROR_CODES = [
   'COMMAND_UNKNOWN',
@@ -38,7 +40,7 @@ const dateTime = z.iso.datetime({ offset: true });
 const locationType = z.enum(['online', 'in_person', 'hybrid']);
 const location = plainText(3, 200);
 const locationFields = z
-  .object({ locationType, locationOrUrl: location })
+  .object({ locationType, locationOrUrl: location, onlineUrl: safeUrl.optional() })
   .refine((value) => value.locationType !== 'online' || safeUrl.safeParse(value.locationOrUrl).success, {
     path: ['locationOrUrl'],
     message: 'Online activities need an HTTPS location URL.'
@@ -46,7 +48,15 @@ const locationFields = z
   .refine(
     (value) => !/^https?:\/\//i.test(value.locationOrUrl) || safeUrl.safeParse(value.locationOrUrl).success,
     { path: ['locationOrUrl'], message: 'Location links must use HTTPS.' }
-  );
+  )
+  .refine((value) => value.locationType === 'online' || !/https?:\/\//i.test(value.locationOrUrl), {
+    path: ['locationOrUrl'],
+    message: 'Use a venue description here; put the private meeting link in the online link field.'
+  })
+  .refine((value) => value.locationType !== 'hybrid' || !!value.onlineUrl, {
+    path: ['onlineUrl'],
+    message: 'Hybrid activities need an HTTPS online link.'
+  });
 
 export const referralPayloadSchema = z
   .object({
@@ -63,7 +73,10 @@ export const referralPayloadSchema = z
   })
   .strict()
   .refine(
-    (value) => value.experienceMin === undefined || value.experienceMax === undefined || value.experienceMin <= value.experienceMax,
+    (value) =>
+      value.experienceMin === undefined ||
+      value.experienceMax === undefined ||
+      value.experienceMin <= value.experienceMax,
     { path: ['experienceMax'], message: 'Maximum experience must be at least the minimum.' }
   );
 export const needReferralPayloadSchema = z
@@ -81,7 +94,11 @@ export const eventPayloadSchema = locationFields
     title: plainText(3, 160),
     description: plainText(10, 2000),
     startAt: dateTime,
-    endAt: dateTime.optional()
+    endAt: dateTime.optional(),
+    timezone: z.string().max(100).optional(),
+    category: plainText(2, 80).optional(),
+    capacity: z.number().int().min(1).max(10000).optional(),
+    registrationOpen: z.boolean().optional()
   })
   .strict()
   .refine((value) => !value.endAt || Date.parse(value.endAt) > Date.parse(value.startAt), {
@@ -93,26 +110,49 @@ export const meetupPayloadSchema = locationFields
     title: plainText(3, 160),
     description: plainText(10, 2000),
     scheduledAt: dateTime,
-    capacity: z.number().int().min(1).max(10000).optional()
+    capacity: z.number().int().min(1).max(10000).optional(),
+    timezone: z.string().max(100).optional()
+  })
+  .strict();
+export const resourcePayloadSchema = z
+  .object({
+    title: plainText(3, 160),
+    description: plainText(10, 2000),
+    category: z.enum(RESOURCE_CATEGORIES),
+    tags: z
+      .array(
+        z
+          .string()
+          .trim()
+          .min(2)
+          .max(30)
+          .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+      )
+      .max(8),
+    fileId: z.string().regex(/^[0-9a-f]{24}$/i)
   })
   .strict();
 export const commandPayloadSchemas = {
   referral: referralPayloadSchema,
   needreferral: needReferralPayloadSchema,
   event: eventPayloadSchema,
-  meetup: meetupPayloadSchema
+  meetup: meetupPayloadSchema,
+  resource: resourcePayloadSchema
 } as const;
 
 export type ReferralPayload = z.infer<typeof referralPayloadSchema>;
 export type NeedReferralPayload = z.infer<typeof needReferralPayloadSchema>;
 export type EventPayload = z.infer<typeof eventPayloadSchema>;
 export type MeetupPayload = z.infer<typeof meetupPayloadSchema>;
-export type CommandPayload = ReferralPayload | NeedReferralPayload | EventPayload | MeetupPayload;
+export type ResourcePayload = z.infer<typeof resourcePayloadSchema>;
+export type CommandPayload =
+  ReferralPayload | NeedReferralPayload | EventPayload | MeetupPayload | ResourcePayload;
 export type CommandSubmission =
   | { command: 'referral'; payloadVersion: 1; payload: ReferralPayload }
   | { command: 'needreferral'; payloadVersion: 1; payload: NeedReferralPayload }
-  | { command: 'event'; payloadVersion: 1; payload: EventPayload }
-  | { command: 'meetup'; payloadVersion: 1; payload: MeetupPayload };
+  | { command: 'event'; payloadVersion: 1; payload: EventPayload; idempotencyKey?: string }
+  | { command: 'meetup'; payloadVersion: 1; payload: MeetupPayload; idempotencyKey?: string }
+  | { command: 'resource'; payloadVersion: 1; payload: ResourcePayload; idempotencyKey?: string };
 
 export interface CommandMetadata {
   id: CommandId;
@@ -120,7 +160,7 @@ export interface CommandMetadata {
   label: string;
   description: string;
   iconId: string;
-  category: 'career' | 'events';
+  category: 'career' | 'events' | 'knowledge';
   enabled: boolean;
   payloadVersion: 1;
   displayType: CommandId;
@@ -136,6 +176,9 @@ interface ActivityBase {
   ownedByMe: boolean;
   canDelete: boolean;
   referralStatus?: 'OPEN' | 'CLOSED' | 'EXPIRED' | 'FULFILLED';
+  eventStatus?: 'scheduled' | 'cancelled' | 'completed';
+  eventId?: string;
+  resourceId?: string;
 }
 export type CommunityActivity = ActivityBase &
   (
@@ -143,6 +186,7 @@ export type CommunityActivity = ActivityBase &
     | { command: 'needreferral'; payload: NeedReferralPayload }
     | { command: 'event'; payload: EventPayload }
     | { command: 'meetup'; payload: MeetupPayload }
+    | { command: 'resource'; payload: ResourcePayload }
   );
 export interface ActivityPage {
   items: CommunityActivity[];

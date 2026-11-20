@@ -5,6 +5,7 @@ async function data<T>(request: Promise<{ data: ApiSuccess<T> }>): Promise<T> {
   return (await request).data.data;
 }
 export const feedApi = {
+  post: (id: string) => data<{ post: FeedPost }>(apiClient.get(`/posts/${encodeURIComponent(id)}`)),
   feed: (cursor?: string) =>
     data<FeedPage>(apiClient.get('/posts', { params: { limit: 10, ...(cursor ? { cursor } : {}) } })),
   saved: (cursor?: string) =>

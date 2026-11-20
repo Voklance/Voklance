@@ -9,6 +9,7 @@ import { profileApi } from '@/features/profiles/api/profileApi';
 import { communityApi } from '../api/communityApi';
 import { commandApi } from '@/features/community-commands/api/commandApi';
 import { referralApi } from '@/features/referrals/api/referralApi';
+import { eventApi } from '@/features/events/api/eventApi';
 import CommunityDiscoveryPage from './CommunityDiscoveryPage';
 import CreateCommunityPage from './CreateCommunityPage';
 import CommunityDetailPage from './CommunityDetailPage';
@@ -41,6 +42,7 @@ vi.mock('@/features/community-commands/api/commandApi', () => ({
 vi.mock('@/features/referrals/api/referralApi', () => ({
   referralApi: { communityOpportunities: vi.fn(), communityNeeds: vi.fn() }
 }));
+vi.mock('@/features/events/api/eventApi', () => ({ eventApi: { community: vi.fn() } }));
 
 const id = 'a'.repeat(24);
 const user: AuthUser = {
@@ -115,6 +117,7 @@ beforeEach(() => {
   vi.mocked(commandApi.activities).mockResolvedValue(page([]));
   vi.mocked(referralApi.communityOpportunities).mockResolvedValue(page([]));
   vi.mocked(referralApi.communityNeeds).mockResolvedValue(page([]));
+  vi.mocked(eventApi.community).mockResolvedValue(page([]));
   detail = {
     ...summary,
     rules: 'Stay on topic.',

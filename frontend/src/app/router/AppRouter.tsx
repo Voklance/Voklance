@@ -11,7 +11,9 @@ import CommunityMembersPage from '@/features/communities/pages/CommunityMembersP
 import CommunityRequestsPage from '@/features/communities/pages/CommunityRequestsPage';
 import CommunitySettingsPage from '@/features/communities/pages/CommunitySettingsPage';
 import HomePage from '@/features/feed/pages/HomePage';
-import SavedPostsPage from '@/features/feed/pages/SavedPostsPage';
+import PostDetailPage from '@/features/feed/pages/PostDetailPage';
+import SavedItemsPage from '@/features/bookmarks/pages/SavedItemsPage';
+import ActivityPage from '@/features/bookmarks/pages/ActivityPage';
 import LoginPage from '@/features/auth/pages/LoginPage';
 import SignupPage from '@/features/auth/pages/SignupPage';
 import VerificationRequiredPage from '@/features/auth/pages/VerificationRequiredPage';
@@ -25,6 +27,32 @@ import PublicProfilePage from '@/features/profiles/pages/PublicProfilePage';
 import MyReferralsPage from '@/features/referrals/pages/MyReferralsPage';
 import ReferralOpportunityPage from '@/features/referrals/pages/ReferralOpportunityPage';
 import ReferralNeedPage from '@/features/referrals/pages/ReferralNeedPage';
+import EventsPage from '@/features/events/pages/EventsPage';
+import EventDetailPage from '@/features/events/pages/EventDetailPage';
+import EventEditPage from '@/features/events/pages/EventEditPage';
+import CommunityResourcesPage from '@/features/resources/pages/CommunityResourcesPage';
+import MyResourcesPage from '@/features/resources/pages/MyResourcesPage';
+import ResourceDetailPage from '@/features/resources/pages/ResourceDetailPage';
+import MyNetworkPage from '@/features/connections/pages/MyNetworkPage';
+import ProfessionalDiscoveryPage from '@/features/connections/pages/ProfessionalDiscoveryPage';
+import MessagesPage from '@/features/messaging/pages/MessagesPage';
+import NotificationsPage from '@/features/notifications/pages/NotificationsPage';
+import NotificationSettingsPage from '@/features/notifications/pages/NotificationSettingsPage';
+import GitHubPage from '@/features/github/pages/GitHubPage';
+import SearchPage from '@/features/search/pages/SearchPage';
+import RecommendationPage from '@/features/recommendations/pages/RecommendationPage';
+import FeedPreferencesPage from '@/features/recommendations/pages/FeedPreferencesPage';
+import SettingsOverviewPage from '@/features/settings/pages/SettingsOverviewPage';
+import AccountSettingsPage from '@/features/settings/pages/AccountSettingsPage';
+import SecuritySettingsPage from '@/features/settings/pages/SecuritySettingsPage';
+import PrivacySettingsPage from '@/features/settings/pages/PrivacySettingsPage';
+import BlockedUsersPage from '@/features/settings/pages/BlockedUsersPage';
+import DataSettingsPage from '@/features/settings/pages/DataSettingsPage';
+import ForgotPasswordPage from '@/features/settings/pages/ForgotPasswordPage';
+import ResetPasswordPage from '@/features/settings/pages/ResetPasswordPage';
+import ReactivatePage from '@/features/settings/pages/ReactivatePage';
+import ConfirmEmailChangePage from '@/features/settings/pages/ConfirmEmailChangePage';
+import VisitorProfilePage from '@/features/profiles/pages/VisitorProfilePage';
 
 type Access = 'root' | 'public' | 'verification' | 'onboarding' | 'app' | 'legacy';
 
@@ -91,11 +119,16 @@ function AccessGate({ access }: { access: Access }) {
 export default function AppRouter() {
   return (
     <Routes>
+      <Route path="/u/:username" element={<VisitorProfilePage />} />
       <Route path="/" element={<AccessGate access="root" />} />
       <Route element={<AccessGate access="public" />}>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route path="/reactivate" element={<ReactivatePage />} />
       </Route>
+      <Route path="/confirm-email-change" element={<ConfirmEmailChangePage />} />
       <Route
         path="/verify-email"
         element={
@@ -108,18 +141,42 @@ export default function AppRouter() {
       <Route path="/onboarding" element={<AccessGate access="onboarding" />} />
       <Route path="/app" element={<AccessGate access="app" />}>
         <Route index element={<HomePage />} />
-        <Route path="saved" element={<SavedPostsPage />} />
+        <Route path="posts/:postId" element={<PostDetailPage />} />
+        <Route path="saved" element={<SavedItemsPage />} />
+        <Route path="activity" element={<ActivityPage />} />
         <Route path="communities" element={<CommunityDiscoveryPage />} />
         <Route path="communities/create" element={<CreateCommunityPage />} />
         <Route path="communities/:slug" element={<CommunityDetailPage />} />
+        <Route path="communities/:slug/resources" element={<CommunityResourcesPage />} />
         <Route path="communities/:slug/members" element={<CommunityMembersPage />} />
         <Route path="communities/:slug/requests" element={<CommunityRequestsPage />} />
         <Route path="communities/:slug/settings" element={<CommunitySettingsPage />} />
         <Route path="referrals" element={<MyReferralsPage />} />
         <Route path="referrals/opportunities/:opportunityId" element={<ReferralOpportunityPage />} />
         <Route path="referrals/needs/:needId" element={<ReferralNeedPage />} />
+        <Route path="events" element={<EventsPage />} />
+        <Route path="events/:eventId" element={<EventDetailPage />} />
+        <Route path="events/:eventId/edit" element={<EventEditPage />} />
+        <Route path="resources" element={<MyResourcesPage />} />
+        <Route path="resources/:resourceId" element={<ResourceDetailPage />} />
         <Route path="profile" element={<MyProfilePage />} />
         <Route path="profile/edit" element={<EditProfilePage />} />
+        <Route path="network" element={<MyNetworkPage />} />
+        <Route path="network/discover" element={<ProfessionalDiscoveryPage />} />
+        <Route path="messages" element={<MessagesPage />} />
+        <Route path="messages/:conversationId" element={<MessagesPage />} />
+        <Route path="notifications" element={<NotificationsPage />} />
+        <Route path="notifications/settings" element={<NotificationSettingsPage />} />
+        <Route path="github" element={<GitHubPage />} />
+        <Route path="search" element={<SearchPage />} />
+        <Route path="recommendations/:category" element={<RecommendationPage />} />
+        <Route path="settings/feed" element={<FeedPreferencesPage />} />
+        <Route path="settings" element={<SettingsOverviewPage />} />
+        <Route path="settings/account" element={<AccountSettingsPage />} />
+        <Route path="settings/security" element={<SecuritySettingsPage />} />
+        <Route path="settings/privacy" element={<PrivacySettingsPage />} />
+        <Route path="settings/blocked-users" element={<BlockedUsersPage />} />
+        <Route path="settings/data" element={<DataSettingsPage />} />
         <Route path="professionals/:username" element={<PublicProfilePage />} />
       </Route>
       <Route path="/account" element={<AccessGate access="legacy" />} />

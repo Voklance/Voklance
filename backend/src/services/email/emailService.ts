@@ -1,6 +1,12 @@
 import nodemailer from 'nodemailer';
 import { env } from '../../config/env.js';
-import { verificationTemplate } from './emailTemplates.js';
+import {
+  emailChangedTemplate,
+  emailChangeTemplate,
+  passwordChangedTemplate,
+  passwordResetTemplate,
+  verificationTemplate
+} from './emailTemplates.js';
 
 export interface EmailProvider {
   send(message: { to: string; subject: string; html: string; text: string }): Promise<boolean>;
@@ -33,4 +39,16 @@ export function setEmailProviderForTests(next: EmailProvider) {
 
 export async function sendVerificationEmail(input: { to: string; verificationUrl: string }) {
   return provider.send({ to: input.to, ...verificationTemplate(input.verificationUrl) });
+}
+export async function sendPasswordResetEmail(input: { to: string; resetUrl: string }) {
+  return provider.send({ to: input.to, ...passwordResetTemplate(input.resetUrl) });
+}
+export async function sendPasswordChangedEmail(to: string) {
+  return provider.send({ to, ...passwordChangedTemplate() });
+}
+export async function sendEmailChangeEmail(input: { to: string; url: string }) {
+  return provider.send({ to: input.to, ...emailChangeTemplate(input.url) });
+}
+export async function sendEmailChangedEmail(to: string) {
+  return provider.send({ to, ...emailChangedTemplate() });
 }

@@ -18,7 +18,13 @@ const schema = z.object({
   SMTP_PASSWORD: z.string().optional(),
   EMAIL_RESEND_COOLDOWN_SECONDS: z.coerce.number().int().min(1).default(60),
   EMAIL_RESEND_HOURLY_LIMIT: z.coerce.number().int().min(1).default(5),
-  EMAIL_RESEND_IP_HOURLY_LIMIT: z.coerce.number().int().min(1).default(20)
+  EMAIL_RESEND_IP_HOURLY_LIMIT: z.coerce.number().int().min(1).default(20),
+  CONNECTION_REREQUEST_COOLDOWN_HOURS: z.coerce.number().int().min(1).max(8760).default(168),
+  GITHUB_CLIENT_ID: z.string().min(1).optional(),
+  GITHUB_CLIENT_SECRET: z.string().min(1).optional(),
+  GITHUB_OAUTH_CALLBACK_URL: z.url().optional(),
+  GITHUB_API_BASE_URL: z.url().default('https://api.github.com'),
+  GITHUB_SYNC_COOLDOWN_MINUTES: z.coerce.number().int().min(1).max(1440).default(5)
 });
 
 const result = schema.safeParse({
@@ -35,7 +41,13 @@ const result = schema.safeParse({
   SMTP_PASSWORD: process.env.SMTP_PASSWORD,
   EMAIL_RESEND_COOLDOWN_SECONDS: process.env.EMAIL_RESEND_COOLDOWN_SECONDS,
   EMAIL_RESEND_HOURLY_LIMIT: process.env.EMAIL_RESEND_HOURLY_LIMIT,
-  EMAIL_RESEND_IP_HOURLY_LIMIT: process.env.EMAIL_RESEND_IP_HOURLY_LIMIT
+  EMAIL_RESEND_IP_HOURLY_LIMIT: process.env.EMAIL_RESEND_IP_HOURLY_LIMIT,
+  CONNECTION_REREQUEST_COOLDOWN_HOURS: process.env.CONNECTION_REREQUEST_COOLDOWN_HOURS,
+  GITHUB_CLIENT_ID: process.env.GITHUB_CLIENT_ID || undefined,
+  GITHUB_CLIENT_SECRET: process.env.GITHUB_CLIENT_SECRET || undefined,
+  GITHUB_OAUTH_CALLBACK_URL: process.env.GITHUB_OAUTH_CALLBACK_URL || undefined,
+  GITHUB_API_BASE_URL: process.env.GITHUB_API_BASE_URL || undefined,
+  GITHUB_SYNC_COOLDOWN_MINUTES: process.env.GITHUB_SYNC_COOLDOWN_MINUTES || undefined
 });
 
 if (!result.success) {
@@ -88,6 +100,32 @@ if (
   throw new Error('Invalid environment configuration: APP_PUBLIC_URL must be an allowed frontend origin');
 if (Boolean(result.data.SMTP_USER) !== Boolean(result.data.SMTP_PASSWORD))
   throw new Error('Invalid environment configuration: SMTP_USER and SMTP_PASSWORD must be set together');
+if (
+  [
+    result.data.GITHUB_CLIENT_ID,
+    result.data.GITHUB_CLIENT_SECRET,
+    result.data.GITHUB_OAUTH_CALLBACK_URL
+  ].filter(Boolean).length !== 0 &&
+  [
+    result.data.GITHUB_CLIENT_ID,
+    result.data.GITHUB_CLIENT_SECRET,
+    result.data.GITHUB_OAUTH_CALLBACK_URL
+  ].filter(Boolean).length !== 3
+)
+  throw new Error('Invalid environment configuration: GitHub OAuth settings must be set together');
+if (
+  result.data.NODE_ENV === 'production' &&
+  result.data.GITHUB_OAUTH_CALLBACK_URL &&
+  new URL(result.data.GITHUB_OAUTH_CALLBACK_URL).protocol !== 'https:'
+)
+  throw new Error(
+    'Invalid environment configuration: GITHUB_OAUTH_CALLBACK_URL must use HTTPS in production'
+  );
+if (
+  result.data.NODE_ENV === 'production' &&
+  new URL(result.data.GITHUB_API_BASE_URL).origin !== 'https://api.github.com'
+)
+  throw new Error('Invalid environment configuration: GITHUB_API_BASE_URL must use GitHub in production');
 
 export const env = {
   nodeEnv: result.data.NODE_ENV,
@@ -104,7 +142,16 @@ export const env = {
   smtpPassword: result.data.SMTP_PASSWORD,
   resendCooldownSeconds: result.data.EMAIL_RESEND_COOLDOWN_SECONDS,
   resendHourlyLimit: result.data.EMAIL_RESEND_HOURLY_LIMIT,
-  resendIpHourlyLimit: result.data.EMAIL_RESEND_IP_HOURLY_LIMIT
+  resendIpHourlyLimit: result.data.EMAIL_RESEND_IP_HOURLY_LIMIT,
+  connectionRerequestCooldownHours: result.data.CONNECTION_REREQUEST_COOLDOWN_HOURS,
+  githubClientId: result.data.GITHUB_CLIENT_ID,
+  githubClientSecret: result.data.GITHUB_CLIENT_SECRET,
+  githubOAuthCallbackUrl: result.data.GITHUB_OAUTH_CALLBACK_URL,
+  githubApiBaseUrl: result.data.GITHUB_API_BASE_URL,
+  githubSyncCooldownMinutes: result.data.GITHUB_SYNC_COOLDOWN_MINUTES,
+  passwordRecoveryAvailable:
+    result.data.NODE_ENV === 'test' ||
+    Boolean(process.env.SMTP_HOST && process.env.EMAIL_FROM && process.env.APP_PUBLIC_URL)
 };
 
 export function isAllowedOrigin(origin: string) {

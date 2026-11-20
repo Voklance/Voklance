@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { MongoMemoryServer } from 'mongodb-memory-server';
+import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import app from '../../app.js';
@@ -10,7 +10,7 @@ import CommunityMembership from '../memberships/model/CommunityMembership.js';
 import CommunityActivity from './model/CommunityActivity.js';
 import { commandDefinitions } from './registry/commandRegistry.js';
 
-let mongo: MongoMemoryServer;
+let mongo: MongoMemoryReplSet;
 let owner = { id: '', cookie: '' };
 let member = { id: '', cookie: '' };
 let outsider = { id: '', cookie: '' };
@@ -77,7 +77,7 @@ const publish = (
     .set('Cookie', cookie)
     .send({ command, payloadVersion, payload });
 beforeAll(async () => {
-  mongo = await MongoMemoryServer.create();
+  mongo = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
   await mongoose.connect(mongo.getUri());
   await Promise.all([
     User.init(),
@@ -125,7 +125,8 @@ describe('structured community commands', () => {
       '/referral',
       '/needreferral',
       '/event',
-      '/meetup'
+      '/meetup',
+      '/resource'
     ]);
     expect(response.body.data.commands[0]).not.toHaveProperty('schema');
     expect(
@@ -321,7 +322,7 @@ describe('structured community commands', () => {
           .delete(`/api/v1/communities/${publicId}/activities/${moderated.body.data.activity.id}`)
           .set('Cookie', owner.cookie)
       ).status
-    ).toBe(200);
+    ).toBe(409);
   });
 
   it('rate-limits repeated submissions', async () => {

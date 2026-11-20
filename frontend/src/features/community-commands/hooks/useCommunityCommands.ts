@@ -32,7 +32,8 @@ export function useCommandActions(communityId: string) {
   const refresh = async () => {
     await Promise.all([
       client.invalidateQueries({ queryKey: ['communities', communityId, 'activities'] }),
-      client.invalidateQueries({ queryKey: ['referrals'] })
+      client.invalidateQueries({ queryKey: ['referrals'] }),
+      client.invalidateQueries({ queryKey: ['events'] })
     ]);
   };
   return {

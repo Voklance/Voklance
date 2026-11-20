@@ -42,4 +42,5 @@ schema.index({ slug: 1 }, { unique: true });
 schema.index({ status: 1, createdAt: -1, _id: -1 });
 schema.index({ status: 1, category: 1, createdAt: -1, _id: -1 });
 schema.index({ ownerId: 1 });
+schema.index({ name: 'text', description: 'text', tags: 'text' });
 export default mongoose.model<CommunityRecord>('Community', schema);

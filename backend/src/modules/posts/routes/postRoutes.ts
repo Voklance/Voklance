@@ -16,6 +16,7 @@ import {
   deletePost,
   editComment,
   editPost,
+  getPost,
   listBookmarks,
   listComments,
   listFeed,
@@ -62,6 +63,9 @@ router.get('/', validateQuery(pageQuery), async (request, response) => {
 router.post('/', writeLimit, validateBody(postBody), async (request, response) => {
   const post = await createPost(userId(request), (request.body as { content: string }).content);
   sendSuccess(response, { post }, 'Post published', 201);
+});
+router.get('/:postId', validateParams(postParams), async (request, response) => {
+  sendSuccess(response, { post: await getPost(userId(request), postId(request)) }, 'Post loaded');
 });
 router.patch(
   '/:postId',

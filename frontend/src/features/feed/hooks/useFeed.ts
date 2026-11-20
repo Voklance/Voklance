@@ -21,7 +21,10 @@ export function useFeedActions() {
   const refresh = () =>
     Promise.all([
       client.invalidateQueries({ queryKey: feedKeys.feed }),
-      client.invalidateQueries({ queryKey: feedKeys.saved })
+      client.invalidateQueries({ queryKey: feedKeys.saved }),
+      client.invalidateQueries({ queryKey: ['saved-items'] }),
+      client.invalidateQueries({ queryKey: ['bookmark-status'] }),
+      client.invalidateQueries({ queryKey: ['recommended-feed'] })
     ]);
   return {
     create: useMutation({ mutationFn: feedApi.create, onSuccess: refresh }),
@@ -57,7 +60,8 @@ export function useCommentActions(postId: string) {
     Promise.all([
       client.invalidateQueries({ queryKey: feedKeys.comments(postId) }),
       client.invalidateQueries({ queryKey: feedKeys.feed }),
-      client.invalidateQueries({ queryKey: feedKeys.saved })
+      client.invalidateQueries({ queryKey: feedKeys.saved }),
+      client.invalidateQueries({ queryKey: ['recommended-feed'] })
     ]);
   return {
     add: useMutation({

@@ -60,6 +60,19 @@ export const commandDefinitions: RegisteredCommand[] = [
     payloadVersion: 1,
     displayType: 'meetup',
     schema: commandPayloadSchemas.meetup
+  },
+  {
+    id: 'resource',
+    command: '/resource',
+    label: 'Share resource',
+    description: 'Share a professional document with your community.',
+    iconId: 'document',
+    category: 'knowledge',
+    enabled: true,
+    requiredPermission: 'command:create',
+    payloadVersion: 1,
+    displayType: 'resource',
+    schema: commandPayloadSchemas.resource
   }
 ];
 

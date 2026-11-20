@@ -23,5 +23,6 @@ const skillSchema = new Schema<SkillRecord>(
 );
 
 skillSchema.index({ slug: 1 }, { unique: true });
+skillSchema.index({ name: 'text', category: 'text' });
 
 export default mongoose.model<SkillRecord>('Skill', skillSchema);

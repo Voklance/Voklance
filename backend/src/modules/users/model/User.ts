@@ -17,6 +17,7 @@ export interface UserRecord {
   onboardingStatus?: OnboardingStatus;
   onboardingStep?: OnboardingStep;
   onboardingCompletedAt?: Date;
+  sessionVersion?: number;
 }
 
 const userSchema = new Schema<UserRecord>(
@@ -36,7 +37,8 @@ const userSchema = new Schema<UserRecord>(
       max: 6,
       validate: { validator: Number.isInteger, message: 'Onboarding step must be an integer.' }
     },
-    onboardingCompletedAt: { type: Date }
+    onboardingCompletedAt: { type: Date },
+    sessionVersion: { type: Number, default: 0, min: 0 }
   },
   { timestamps: true }
 );
