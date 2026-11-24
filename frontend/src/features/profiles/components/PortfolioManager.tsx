@@ -8,14 +8,12 @@ export default function PortfolioManager() {
   const client = useQueryClient();
   const certifications = useQuery({ queryKey: ['my-certifications'], queryFn: portfolioApi.certifications });
   const projects = useQuery({ queryKey: ['my-projects'], queryFn: portfolioApi.projects });
-  const completeness = useQuery({ queryKey: ['profile-completeness'], queryFn: portfolioApi.completeness });
   const [editingCert, setEditingCert] = useState<ProfileCertification | null>(null);
   const [editingProject, setEditingProject] = useState<ProfileProject | null>(null);
   const refresh = async () => {
     await Promise.all([
       client.invalidateQueries({ queryKey: ['my-certifications'] }),
       client.invalidateQueries({ queryKey: ['my-projects'] }),
-      client.invalidateQueries({ queryKey: ['profile-completeness'] }),
       client.invalidateQueries({ queryKey: ['profiles'] })
     ]);
   };
@@ -93,18 +91,7 @@ export default function PortfolioManager() {
   }
   return (
     <div className="portfolio-manager">
-      {completeness.data && (
-        <section className="profile-section">
-          <h2>Profile completeness</h2>
-          <p>{completeness.data.percentage}% complete</p>
-          <progress max="100" value={completeness.data.percentage} aria-label="Profile completeness" />
-          {completeness.data.suggestedSections.length > 0 && (
-            <p>Consider adding: {completeness.data.suggestedSections.join(', ')}.</p>
-          )}
-          <p>This is a guide to profile sections, not a professional rating.</p>
-        </section>
-      )}
-      <section className="profile-section">
+      <section className="profile-section" id="profile-certifications-editor">
         <h2>Manage certifications</h2>
         {certifications.isError && <p role="alert">Could not load certifications.</p>}
         <ul>
@@ -177,7 +164,7 @@ export default function PortfolioManager() {
           <p role="alert">{apiErrorMessage(saveCert.error ?? removeCert.error)}</p>
         )}
       </section>
-      <section className="profile-section">
+      <section className="profile-section" id="profile-projects-editor">
         <h2>Manage projects</h2>
         {projects.isError && <p role="alert">Could not load projects.</p>}
         <ul>

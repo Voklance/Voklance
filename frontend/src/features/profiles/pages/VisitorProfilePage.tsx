@@ -13,6 +13,7 @@ export default function VisitorProfilePage() {
     <main className="visitor-profile">
       <ProfileDetails
         profile={query.data.profile}
+        rating={query.data.rating}
         skills={query.data.skills}
         experiences={query.data.experiences}
         education={query.data.education}

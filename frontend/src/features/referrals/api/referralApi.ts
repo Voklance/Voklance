@@ -9,7 +9,6 @@ import type {
   ReferralOfferInput,
   ReferralOpportunity,
   ReferralResponsePage,
-  MyReferralResponse,
   ReferralPayload,
   NeedReferralPayload
 } from '@voklance/shared';
@@ -18,8 +17,6 @@ import { apiClient } from '@/lib/apiClient';
 async function data<T>(request: Promise<{ data: ApiSuccess<T> }>): Promise<T> {
   return (await request).data.data;
 }
-export type ReferralKind = 'opportunities' | 'needs';
-export type MySection = ReferralKind | 'applications' | 'offers';
 const listParams = (limit: number, cursor?: string, status?: string) => ({
   limit,
   ...(cursor ? { cursor } : {}),
@@ -67,21 +64,5 @@ export const referralApi = {
     data<{ opportunity: ReferralOpportunity }>(apiClient.post(`/referrals/opportunities/${id}/close`, {})),
   closeNeed: (id: string) => data<{ need: ReferralNeed }>(apiClient.post(`/referrals/needs/${id}/close`, {})),
   fulfillNeed: (id: string) =>
-    data<{ need: ReferralNeed }>(apiClient.post(`/referrals/needs/${id}/fulfill`, {})),
-  myOpportunities: (cursor?: string) =>
-    data<ReferralResponsePage<ReferralOpportunity>>(
-      apiClient.get('/referrals/opportunities/me', { params: listParams(10, cursor) })
-    ),
-  myNeeds: (cursor?: string) =>
-    data<ReferralResponsePage<ReferralNeed>>(
-      apiClient.get('/referrals/needs/me', { params: listParams(10, cursor) })
-    ),
-  myApplications: (cursor?: string) =>
-    data<ReferralResponsePage<MyReferralResponse<ReferralApplication>>>(
-      apiClient.get('/referrals/applications/me', { params: listParams(10, cursor) })
-    ),
-  myOffers: (cursor?: string) =>
-    data<ReferralResponsePage<MyReferralResponse<ReferralOffer>>>(
-      apiClient.get('/referrals/offers/me', { params: listParams(10, cursor) })
-    )
+    data<{ need: ReferralNeed }>(apiClient.post(`/referrals/needs/${id}/fulfill`, {}))
 };

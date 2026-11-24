@@ -54,6 +54,7 @@ export const profilePatchSchema = profileFields
 
 export const usernameQuerySchema = z.object({ username: usernameSchema }).strict();
 export const publicUsernameParamsSchema = z.object({ username: usernameSchema }).strict();
+export const profileRatingBodySchema = z.object({ stars: z.number().int().min(1).max(5) }).strict();
 
 export type BasicProfileInput = z.infer<typeof basicProfileSchema>;
 export type ProfilePatchInput = z.infer<typeof profilePatchSchema>;

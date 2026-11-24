@@ -7,27 +7,22 @@ import {
   useMyExperiences,
   useMyInterests,
   useMyProfile,
+  useMyRating,
   useMySkills
 } from '../hooks/useProfileData';
-import { useNetworkCounts } from '@/features/connections/hooks/useNetwork';
-import PortfolioManager from '../components/PortfolioManager';
 import { useQuery } from '@tanstack/react-query';
 import { portfolioApi } from '../api/portfolioApi';
-import { useState } from 'react';
-import ProfileSectionOrder from '../components/ProfileSectionOrder';
 
 export default function MyProfilePage() {
   const location = useLocation();
   const profile = useMyProfile();
+  const rating = useMyRating();
   const skills = useMySkills();
   const interests = useMyInterests();
   const experiences = useMyExperiences();
   const education = useMyEducations();
-  const network = useNetworkCounts();
   const certifications = useQuery({ queryKey: ['my-certifications'], queryFn: portfolioApi.certifications });
   const projects = useQuery({ queryKey: ['my-projects'], queryFn: portfolioApi.projects });
-  const [copied, setCopied] = useState(false);
-  const [copyError, setCopyError] = useState(false);
   const queries = [profile, skills, interests, experiences, education];
   if (queries.some((query) => query.isPending)) return <LoadingState label="Loading your profile…" />;
   if (queries.some((query) => query.isError))
@@ -47,7 +42,6 @@ export default function MyProfilePage() {
         </Link>
       </section>
     );
-  const shareUsername = profile.data.profile.username;
   return (
     <>
       {(location.state as { saved?: boolean } | null)?.saved && (
@@ -58,6 +52,7 @@ export default function MyProfilePage() {
       <ProfileDetails
         owner
         profile={profile.data.profile}
+        rating={rating.data}
         skills={skills.data?.skills ?? []}
         interests={interests.data?.interests ?? []}
         experiences={experiences.data?.experiences ?? []}
@@ -65,42 +60,6 @@ export default function MyProfilePage() {
         certifications={certifications.data?.items ?? []}
         projects={projects.data?.items ?? []}
       />
-      {profile.data.profile.visibility === 'PUBLIC' && (
-        <div className="profile-share">
-          <Link to={`/u/${shareUsername}`}>View as visitor</Link>
-          <button
-            type="button"
-            onClick={() => {
-              if (!navigator.clipboard?.writeText) {
-                setCopyError(true);
-                return;
-              }
-              void navigator.clipboard
-                .writeText(`${window.location.origin}/u/${shareUsername}`)
-                .then(() => {
-                  setCopied(true);
-                  setCopyError(false);
-                })
-                .catch(() => {
-                  setCopied(false);
-                  setCopyError(true);
-                });
-            }}
-          >
-            Copy profile link
-          </button>
-          {copied && <span role="status">Link copied.</span>}
-          {copyError && <span role="alert">Copy unavailable. Use the visitor link instead.</span>}
-        </div>
-      )}
-      <PortfolioManager />
-      <ProfileSectionOrder initial={profile.data.profile.sectionOrder} />
-      <p className="network-own-count">
-        {network.data?.counts.connections ?? '—'} connections · <Link to="/app/network">Manage network</Link>
-      </p>
-      <p>
-        <Link to="/app/github">Manage GitHub projects</Link>
-      </p>
     </>
   );
 }

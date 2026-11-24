@@ -39,10 +39,10 @@ export default function NotificationBell() {
         aria-label={`Notifications${count.data?.unreadCount ? `, ${count.data.unreadCount} unread` : ''}`}
         onClick={() => setOpen(!open)}
       >
-        Notifications{' '}
-        {count.data?.unreadCount ? (
-          <span className="notification-badge">{count.data.unreadCount}</span>
-        ) : null}
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM10 21h4" />
+        </svg>
+        {count.data?.unreadCount ? <span className="notification-badge" aria-hidden="true" /> : null}
       </button>
       {open && (
         <section className="notification-dropdown" role="dialog" aria-label="Notifications">

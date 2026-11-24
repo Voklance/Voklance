@@ -13,7 +13,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { communityApi } from '@/features/communities/api/communityApi';
 import { referralApi } from '../api/referralApi';
 import CommunityReferralBoard from '../components/CommunityReferralBoard';
-import MyReferralsPage from './MyReferralsPage';
 import ReferralOpportunityPage from './ReferralOpportunityPage';
 import ReferralNeedPage from './ReferralNeedPage';
 
@@ -34,11 +33,7 @@ vi.mock('../api/referralApi', () => ({
     updateNeed: vi.fn(),
     closeOpportunity: vi.fn(),
     closeNeed: vi.fn(),
-    fulfillNeed: vi.fn(),
-    myOpportunities: vi.fn(),
-    myNeeds: vi.fn(),
-    myApplications: vi.fn(),
-    myOffers: vi.fn()
+    fulfillNeed: vi.fn()
   }
 }));
 const id = 'a'.repeat(24);
@@ -182,10 +177,6 @@ beforeEach(() => {
   vi.mocked(referralApi.offerStatus).mockResolvedValue({ offer: { ...offer, status: 'ACCEPTED' } });
   vi.mocked(referralApi.communityOpportunities).mockResolvedValue(page([]));
   vi.mocked(referralApi.communityNeeds).mockResolvedValue(page([]));
-  vi.mocked(referralApi.myOpportunities).mockResolvedValue(page([]));
-  vi.mocked(referralApi.myNeeds).mockResolvedValue(page([]));
-  vi.mocked(referralApi.myApplications).mockResolvedValue(page([]));
-  vi.mocked(referralApi.myOffers).mockResolvedValue(page([]));
 });
 afterEach(cleanup);
 
@@ -268,22 +259,6 @@ describe('referral UI', () => {
     expect(await screen.findByRole('heading', { name: 'Your request' })).toBeTruthy();
     expect(screen.getByText(/Accepted means/)).toBeTruthy();
   });
-  it('renders dashboard sections, real statuses, community links, and pagination', async () => {
-    vi.mocked(referralApi.myOpportunities)
-      .mockResolvedValueOnce(page([opportunity], 'next'))
-      .mockResolvedValue(page([{ ...opportunity, id: 'f'.repeat(24) }]));
-    vi.mocked(referralApi.myNeeds).mockResolvedValue(page([need]));
-    vi.mocked(referralApi.myApplications).mockResolvedValue(
-      page([{ response: application, target: opportunity }])
-    );
-    vi.mocked(referralApi.myOffers).mockResolvedValue(page([{ response: offer, target: need }]));
-    mountStandalone(<MyReferralsPage />);
-    expect(await screen.findByRole('heading', { name: 'My opportunities' })).toBeTruthy();
-    expect((await screen.findAllByText('Referral Guild')).length).toBeGreaterThan(0);
-    expect(screen.getByRole('heading', { name: 'Offers I made' })).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
-    await waitFor(() => expect(referralApi.myOpportunities).toHaveBeenCalledWith('next'));
-  });
   it('filters community referrals and loads another page', async () => {
     vi.mocked(referralApi.communityOpportunities)
       .mockResolvedValueOnce(page([opportunity], 'next'))
@@ -299,11 +274,5 @@ describe('referral UI', () => {
       target: { value: 'CLOSED' }
     });
     await waitFor(() => expect(referralApi.communityOpportunities).toHaveBeenCalledWith(id, '', 'CLOSED'));
-  });
-  it('shows empty and error states for referral lists', async () => {
-    vi.mocked(referralApi.myOffers).mockRejectedValueOnce(new Error('offline'));
-    mountStandalone(<MyReferralsPage />);
-    expect(await screen.findByText('No my opportunities yet.')).toBeTruthy();
-    expect(await screen.findByRole('alert')).toBeTruthy();
   });
 });

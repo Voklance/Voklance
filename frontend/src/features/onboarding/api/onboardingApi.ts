@@ -49,8 +49,10 @@ export const onboardingApi = {
   selectedSkills: () => data<SkillsResponseData>(apiClient.get('/users/me/skills')),
   saveSkills: (input: SkillSelectionRequest) =>
     data<SkillsResponseData>(apiClient.put('/users/me/skills', input)),
-  interests: (search = '') =>
-    data<CatalogPage>(apiClient.get('/interests', { params: { search, limit: 50 } })),
+  interests: (search = '') => {
+    const term = search.trim();
+    return data<CatalogPage>(apiClient.get('/interests', { params: { search: term, limit: term ? 50 : 8 } }));
+  },
   selectedInterests: () => data<InterestsResponseData>(apiClient.get('/users/me/interests')),
   saveInterests: (input: InterestSelectionRequest) =>
     data<InterestsResponseData>(apiClient.put('/users/me/interests', input)),

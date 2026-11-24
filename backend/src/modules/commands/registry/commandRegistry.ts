@@ -62,6 +62,19 @@ export const commandDefinitions: RegisteredCommand[] = [
     schema: commandPayloadSchemas.meetup
   },
   {
+    id: 'discussion',
+    command: '/discussion',
+    label: 'Discussion',
+    description: 'Ask a question or share an idea with your community.',
+    iconId: 'discussion',
+    category: 'knowledge',
+    enabled: true,
+    requiredPermission: 'command:create',
+    payloadVersion: 1,
+    displayType: 'discussion',
+    schema: commandPayloadSchemas.discussion
+  },
+  {
     id: 'resource',
     command: '/resource',
     label: 'Share resource',

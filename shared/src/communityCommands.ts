@@ -1,13 +1,14 @@
 import { z } from 'zod';
 import { RESOURCE_CATEGORIES } from './resources.js';
 
-export const COMMAND_IDS = ['referral', 'needreferral', 'event', 'meetup', 'resource'] as const;
+export const COMMAND_IDS = ['referral', 'needreferral', 'event', 'meetup', 'discussion', 'resource'] as const;
 export type CommandId = (typeof COMMAND_IDS)[number];
 export const COMMAND_LABELS: Record<CommandId, string> = {
   referral: 'Referral opportunity',
   needreferral: 'Referral request',
   event: 'Professional event',
   meetup: 'Professional meetup',
+  discussion: 'Discussion',
   resource: 'Share resource'
 };
 export const COMMAND_ERROR_CODES = [
@@ -30,12 +31,18 @@ export const plainText = (min: number, max: number) =>
 export const safeUrl = z
   .string()
   .trim()
-  .url()
   .max(2048)
-  .refine((value) => {
-    const url = new URL(value);
-    return url.protocol === 'https:' && !url.username && !url.password;
-  }, 'Use an HTTPS URL without credentials.');
+  .superRefine((value, context) => {
+    let url: URL;
+    try {
+      url = new URL(value);
+    } catch {
+      context.addIssue({ code: 'custom', message: 'Enter a valid HTTPS URL.' });
+      return;
+    }
+    if (url.protocol !== 'https:' || url.username || url.password)
+      context.addIssue({ code: 'custom', message: 'Use an HTTPS URL without credentials.' });
+  });
 const dateTime = z.iso.datetime({ offset: true });
 const locationType = z.enum(['online', 'in_person', 'hybrid']);
 const location = plainText(3, 200);
@@ -114,22 +121,30 @@ export const meetupPayloadSchema = locationFields
     timezone: z.string().max(100).optional()
   })
   .strict();
-export const resourcePayloadSchema = z
+const resourceFields = z.object({
+  title: plainText(3, 160),
+  description: plainText(10, 2000),
+  category: z.enum(RESOURCE_CATEGORIES),
+  tags: z
+    .array(
+      z
+        .string()
+        .trim()
+        .min(2)
+        .max(30)
+        .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+    )
+    .max(8)
+    .default([])
+});
+export const resourcePayloadSchema = z.union([
+  resourceFields.extend({ fileId: z.string().regex(/^[0-9a-f]{24}$/i) }).strict(),
+  resourceFields.extend({ url: safeUrl }).strict()
+]);
+export const discussionPayloadSchema = z
   .object({
     title: plainText(3, 160),
-    description: plainText(10, 2000),
-    category: z.enum(RESOURCE_CATEGORIES),
-    tags: z
-      .array(
-        z
-          .string()
-          .trim()
-          .min(2)
-          .max(30)
-          .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
-      )
-      .max(8),
-    fileId: z.string().regex(/^[0-9a-f]{24}$/i)
+    body: plainText(10, 4000)
   })
   .strict();
 export const commandPayloadSchemas = {
@@ -137,6 +152,7 @@ export const commandPayloadSchemas = {
   needreferral: needReferralPayloadSchema,
   event: eventPayloadSchema,
   meetup: meetupPayloadSchema,
+  discussion: discussionPayloadSchema,
   resource: resourcePayloadSchema
 } as const;
 
@@ -145,13 +161,15 @@ export type NeedReferralPayload = z.infer<typeof needReferralPayloadSchema>;
 export type EventPayload = z.infer<typeof eventPayloadSchema>;
 export type MeetupPayload = z.infer<typeof meetupPayloadSchema>;
 export type ResourcePayload = z.infer<typeof resourcePayloadSchema>;
+export type DiscussionPayload = z.infer<typeof discussionPayloadSchema>;
 export type CommandPayload =
-  ReferralPayload | NeedReferralPayload | EventPayload | MeetupPayload | ResourcePayload;
+  ReferralPayload | NeedReferralPayload | EventPayload | MeetupPayload | DiscussionPayload | ResourcePayload;
 export type CommandSubmission =
   | { command: 'referral'; payloadVersion: 1; payload: ReferralPayload }
   | { command: 'needreferral'; payloadVersion: 1; payload: NeedReferralPayload }
   | { command: 'event'; payloadVersion: 1; payload: EventPayload; idempotencyKey?: string }
   | { command: 'meetup'; payloadVersion: 1; payload: MeetupPayload; idempotencyKey?: string }
+  | { command: 'discussion'; payloadVersion: 1; payload: DiscussionPayload }
   | { command: 'resource'; payloadVersion: 1; payload: ResourcePayload; idempotencyKey?: string };
 
 export interface CommandMetadata {
@@ -186,6 +204,7 @@ export type CommunityActivity = ActivityBase &
     | { command: 'needreferral'; payload: NeedReferralPayload }
     | { command: 'event'; payload: EventPayload }
     | { command: 'meetup'; payload: MeetupPayload }
+    | { command: 'discussion'; payload: DiscussionPayload }
     | { command: 'resource'; payload: ResourcePayload }
   );
 export interface ActivityPage {

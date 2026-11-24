@@ -55,7 +55,7 @@ export default function GlobalSearch() {
         id="global-search-input"
         type="search"
         autoComplete="off"
-        placeholder="Search people, posts, communities…"
+        placeholder="Search for people, communities, posts…"
         value={draft}
         onChange={(event) => {
           setDraft(event.target.value);
@@ -70,7 +70,10 @@ export default function GlobalSearch() {
         aria-activedescendant={active >= 0 ? `global-search-result-${active}` : undefined}
       />
       <button type="submit" aria-label="Search">
-        Search
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <circle cx="10.8" cy="10.8" r="7.3" />
+          <path d="m16.2 16.2 5 5" />
+        </svg>
       </button>
       {open && draft.trim().length >= 2 && (
         <div

@@ -17,7 +17,6 @@ type Filters = {
 };
 const data = async <T>(promise: Promise<{ data: ApiSuccess<T> }>) => (await promise).data.data;
 export const eventApi = {
-  list: (filters: Filters) => data<EventPage>(apiClient.get('/events', { params: filters })),
   community: (communityId: string, filters: Omit<Filters, 'communityId'> = {}) =>
     data<EventPage>(apiClient.get(`/communities/${communityId}/events`, { params: filters })),
   detail: (eventId: string) => data<{ event: ProfessionalEventDTO }>(apiClient.get(`/events/${eventId}`)),
@@ -34,4 +33,3 @@ export const eventApi = {
   attendees: (eventId: string, cursor?: string) =>
     data<EventAttendeePage>(apiClient.get(`/events/${eventId}/attendees`, { params: { cursor } }))
 };
-export type { Filters as EventFilters };

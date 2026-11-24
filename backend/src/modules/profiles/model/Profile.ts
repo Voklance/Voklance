@@ -17,6 +17,7 @@ export interface ProfileRecord {
   headline: string;
   bio?: string;
   avatarUrl?: string;
+  coverUrl?: string;
   city?: string;
   country: string;
   professionalStatus?: ProfessionalStatus;
@@ -63,8 +64,18 @@ const profileSchema = new Schema<ProfileRecord>(
       trim: true,
       maxlength: 2048,
       validate: {
-        validator: (value: string | undefined) => !value || /^https:\/\//.test(value),
-        message: 'Avatar URL must use HTTPS.'
+        validator: (value: string | undefined) =>
+          !value || /^https:\/\//.test(value) || /^\/api\/v1\/media\/[0-9a-f]{24}$/.test(value),
+        message: 'Avatar URL must use HTTPS or an uploaded image.'
+      }
+    },
+    coverUrl: {
+      type: String,
+      trim: true,
+      maxlength: 2048,
+      validate: {
+        validator: (value: string | undefined) => !value || /^\/api\/v1\/media\/[0-9a-f]{24}$/.test(value),
+        message: 'Cover must be an uploaded image.'
       }
     },
     city: { type: String, trim: true, maxlength: 100 },

@@ -6,12 +6,10 @@ import { MemoryRouter, Route, Routes } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eventApi } from '../api/eventApi';
 import { zonedDateTime } from '../utils/zonedDateTime';
-import EventsPage from './EventsPage';
 import EventDetailPage from './EventDetailPage';
 
 vi.mock('../api/eventApi', () => ({
   eventApi: {
-    list: vi.fn(),
     community: vi.fn(),
     detail: vi.fn(),
     edit: vi.fn(),
@@ -49,7 +47,6 @@ const event: ProfessionalEventDTO = {
   canParticipate: true,
   canViewAttendees: false
 };
-const page = { items: [event], hasMore: false, nextCursor: null };
 function mount(path: string, element: React.ReactNode) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity }, mutations: { retry: false } }
@@ -58,10 +55,7 @@ function mount(path: string, element: React.ReactNode) {
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={[path]}>
         <Routes>
-          <Route
-            path={path.includes('/events/') ? '/app/events/:eventId' : '/app/events'}
-            element={element}
-          />
+          <Route path="/app/events/:eventId" element={element} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>
@@ -69,7 +63,6 @@ function mount(path: string, element: React.ReactNode) {
 }
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(eventApi.list).mockResolvedValue(page);
   vi.mocked(eventApi.detail).mockResolvedValue({ event });
   vi.mocked(eventApi.register).mockResolvedValue({
     event: { ...event, myRegistration: 'registered', confirmedCount: 2 }
@@ -82,14 +75,6 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 describe('event pages', () => {
-  it('shows discovery and switches dashboard filters', async () => {
-    mount('/app/events', <EventsPage />);
-    expect(await screen.findByRole('link', { name: 'Architecture workshop' })).toBeTruthy();
-    fireEvent.click(screen.getByRole('tab', { name: 'Past events' }));
-    await waitFor(() =>
-      expect(eventApi.list).toHaveBeenCalledWith(expect.objectContaining({ upcoming: false }))
-    );
-  });
   it('shows eligible registration and hides organizer controls', async () => {
     mount(`/app/events/${id}`, <EventDetailPage />);
     expect(await screen.findByRole('heading', { name: 'Architecture workshop' })).toBeTruthy();

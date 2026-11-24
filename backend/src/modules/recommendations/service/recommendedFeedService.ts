@@ -85,13 +85,18 @@ export async function recommendedFeed(
   const active = new Set(users.map((row) => row._id.toString()));
   const published = new Set(profiles.map((row) => row.userId.toString()));
   const suppressed = new Set(feedback.map((row) => row.entityId.toString()));
-  const eligible = candidates.filter(
-    (post) =>
-      active.has(post.authorId.toString()) &&
-      published.has(post.authorId.toString()) &&
+  const eligible = candidates.filter((post) => {
+    const authorId = post.authorId.toString();
+    return (
+      active.has(authorId) &&
+      (published.has(authorId) || authorId === userId) &&
       !suppressed.has(post._id.toString()) &&
-      (mode !== 'following' || context.connectionIds.has(post.authorId.toString()))
-  );
+      (mode !== 'following' ||
+        context.connectionIds.has(authorId) ||
+        context.followedUserIds.has(authorId) ||
+        authorId === userId)
+    );
+  });
   const scored = eligible.map((post) => {
     const match = topicMatch(post.content, context.topics);
     const connected = context.connectionIds.has(post.authorId.toString());

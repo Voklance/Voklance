@@ -1,4 +1,3 @@
-import { Link } from 'react-router';
 import EventCard from './EventCard';
 import { useCommunityEvents } from '../hooks/useEvents';
 
@@ -8,7 +7,6 @@ export default function CommunityEventsBoard({ communityId }: { communityId: str
     <section className="community-panel" aria-labelledby="community-events-heading">
       <div className="event-board-heading">
         <h2 id="community-events-heading">Upcoming events and meetups</h2>
-        <Link to="/app/events">Explore all</Link>
       </div>
       {query.isPending ? (
         <p role="status">Loading gatherings…</p>

@@ -398,12 +398,54 @@ describe('onboarding wizard', () => {
     fireEvent.click(await screen.findByRole('checkbox', { name: /Career opportunities/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Next' }));
     await screen.findByRole('heading', { name: 'Review' });
+    expect(screen.getByText('Your personal information')).toBeTruthy();
+    expect(screen.getByText('Your current work status')).toBeTruthy();
     const review = screen.getByRole('heading', { name: 'Interests', level: 2 }).closest('section');
     expect(review && within(review).getByText('Career opportunities')).toBeTruthy();
     expect(onboardingApi.saveInterests).toHaveBeenCalledWith(
       { interestIds: [interest.id] },
       expect.anything()
     );
+    fireEvent.click(screen.getByRole('button', { name: 'Edit interests' }));
+    await screen.findByRole('heading', { name: 'Interests', level: 1 });
+  });
+
+  it('shows a short interests list and searches the backend catalog for more', async () => {
+    setupSnapshot(5);
+    const initial = Array.from({ length: 8 }, (_, index) => ({
+      id: String(index + 1).repeat(24),
+      name: `Interest ${index + 1}`,
+      slug: `interest-${index + 1}`,
+      category: 'Technology'
+    }));
+    const mentorship: CatalogItem = {
+      id: '9'.repeat(24),
+      name: 'Mentorship',
+      slug: 'mentorship',
+      category: 'Career'
+    };
+    vi.mocked(onboardingApi.interests).mockImplementation(async (search) => ({
+      items: search ? [mentorship] : initial,
+      page: 1,
+      limit: search ? 50 : 8,
+      total: search ? 1 : 120
+    }));
+    renderPage();
+    await screen.findByRole('heading', { name: 'Interests' });
+    const available = await screen.findByRole('group', { name: 'Available interests' });
+    await within(available).findByRole('checkbox', { name: /Interest 1/ });
+    expect(within(available).getAllByRole('checkbox')).toHaveLength(8);
+    expect(screen.getByText('Showing 8 interests. Search to find more.')).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText('Search interests'), { target: { value: 'Mentor' } });
+    expect(screen.queryByRole('group', { name: 'Available interests' })).toBeNull();
+    await within(await screen.findByRole('group', { name: 'Available interests' })).findByRole('checkbox', {
+      name: /Mentorship/
+    });
+    expect(onboardingApi.interests).toHaveBeenCalledWith('Mentor');
+    expect(
+      within(screen.getByRole('group', { name: 'Available interests' })).getAllByRole('checkbox')
+    ).toHaveLength(1);
   });
 
   it('only redirects after confirmed completion and prevents duplicate requests', async () => {

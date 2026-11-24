@@ -2,7 +2,6 @@ import { COMMUNITY_CATEGORY_LABELS } from '@voklance/shared';
 import { Link, useParams } from 'react-router';
 import { apiErrorMessage } from '@/lib/apiClient';
 import { useCommunity, useCommunityActions } from '../hooks/useCommunities';
-import CommunityActivityBoard from '@/features/community-commands/components/CommunityActivityBoard';
 import CommunityEventsBoard from '@/features/events/components/CommunityEventsBoard';
 import CommunityReferralBoard from '@/features/referrals/components/CommunityReferralBoard';
 
@@ -94,6 +93,11 @@ export default function CommunityDetailPage() {
           {apiErrorMessage(join.error ?? leave.error)}
         </p>
       )}
+      {!privatePreview && (
+        <Link className="community-primary community-chat-entry" to={`/app/communities/${slug}/chat`}>
+          {member ? 'Open community chat' : 'View community chat'}
+        </Link>
+      )}
       {privatePreview ? (
         <section className="community-panel">
           <h2>About this community</h2>
@@ -149,7 +153,6 @@ export default function CommunityDetailPage() {
         </Link>
       )}
       {!privatePreview && <CommunityEventsBoard communityId={community.id} />}
-      {!privatePreview && <CommunityActivityBoard community={community} />}
     </div>
   );
 }

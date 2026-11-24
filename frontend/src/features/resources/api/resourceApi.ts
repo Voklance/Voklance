@@ -15,20 +15,10 @@ type Filters = {
   cursor?: string;
   limit?: number;
 };
-type Capabilities = {
-  uploadAvailable: boolean;
-  publicationAvailable: boolean;
-  scanningAvailable: boolean;
-  previewAvailable: boolean;
-  maxFileBytes: number;
-  maxFilesPerResource: number;
-};
 const data = async <T>(promise: Promise<{ data: ApiSuccess<T> }>) => (await promise).data.data;
 export const resourceApi = {
-  capabilities: () => data<Capabilities>(apiClient.get('/resources/capabilities')),
   community: (communityId: string, filters: Filters) =>
     data<ResourcePage>(apiClient.get(`/communities/${communityId}/resources`, { params: filters })),
-  mine: (filters: Filters) => data<ResourcePage>(apiClient.get('/resources/mine', { params: filters })),
   detail: (resourceId: string) =>
     data<{ resource: CommunityResourceDTO }>(apiClient.get(`/resources/${resourceId}`)),
   edit: (resourceId: string, body: Record<string, unknown>) =>

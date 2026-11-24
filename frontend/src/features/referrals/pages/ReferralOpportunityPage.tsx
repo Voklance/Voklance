@@ -36,8 +36,6 @@ export default function ReferralOpportunityPage() {
   return (
     <div className="referral-page">
       <nav className="referral-breadcrumb">
-        <Link to="/app/referrals">My referrals</Link>
-        <span>/</span>
         <Link to={`/app/communities/${item.community.slug}`}>{item.community.name}</Link>
       </nav>
       <h1>Referral opportunity</h1>

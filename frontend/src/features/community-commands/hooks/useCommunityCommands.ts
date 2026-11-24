@@ -24,7 +24,10 @@ export function useCommunityActivities(
     queryFn: ({ pageParam }) => commandApi.activities(communityId, command, pageParam),
     initialPageParam: '' as string,
     getNextPageParam: (page) => (page.hasMore ? (page.nextCursor ?? undefined) : undefined),
-    enabled: !!communityId && enabled
+    enabled: !!communityId && enabled,
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchInterval: 15_000
   });
 }
 export function useCommandActions(communityId: string) {

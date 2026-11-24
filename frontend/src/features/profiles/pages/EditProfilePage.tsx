@@ -6,7 +6,7 @@ import {
 } from '@voklance/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState, type FormEvent } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { Link, useLocation, useNavigate } from 'react-router';
 import { z } from 'zod';
 import ErrorState from '@/components/shared/ErrorState';
 import LoadingState from '@/components/shared/LoadingState';
@@ -17,7 +17,10 @@ import { onboardingKeys, useSkillsCatalog } from '@/features/onboarding/hooks/us
 import { fieldErrors, profileSchema } from '@/features/onboarding/validation/onboardingSchemas';
 import { apiErrorMessage } from '@/lib/apiClient';
 import { profileApi } from '../api/profileApi';
+import { mediaUrl } from '@/lib/mediaUrl';
 import { useMyEducations, useMyExperiences, useMyProfile, useMySkills } from '../hooks/useProfileData';
+import PortfolioManager from '../components/PortfolioManager';
+import ProfileSectionOrder from '../components/ProfileSectionOrder';
 
 const urlInput = z
   .string()
@@ -57,15 +60,51 @@ export default function EditProfilePage() {
   const account = useCurrentUser();
   const client = useQueryClient();
   const navigate = useNavigate();
+  const location = useLocation();
   const [draft, setDraft] = useState<Draft | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [message, setMessage] = useState('');
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<CatalogItem[] | null>(null);
   const [skillMessage, setSkillMessage] = useState('');
+  const [photoError, setPhotoError] = useState('');
   const catalog = useSkillsCatalog(search, true);
   const save = useMutation({ mutationFn: profileApi.save });
   const saveSkills = useMutation({ mutationFn: profileApi.saveSkills });
+  const uploadAvatar = useMutation({ mutationFn: profileApi.uploadAvatar });
+  const removeAvatar = useMutation({ mutationFn: profileApi.removeAvatar });
+
+  async function refreshPhoto() {
+    await Promise.all([
+      client.invalidateQueries({ queryKey: onboardingKeys.profile }),
+      client.invalidateQueries({ queryKey: ['profiles', 'public'] }),
+      client.invalidateQueries({ queryKey: ['recommended-feed'] }),
+      client.invalidateQueries({ queryKey: ['feed'] })
+    ]);
+  }
+  async function choosePhoto(file: File | null) {
+    if (!file) return;
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 8 * 1024 * 1024) {
+      setPhotoError('Choose a JPEG, PNG, or WebP image up to 8 MB.');
+      return;
+    }
+    setPhotoError('');
+    try {
+      await uploadAvatar.mutateAsync(file);
+      await refreshPhoto();
+    } catch (error) {
+      setPhotoError(apiErrorMessage(error));
+    }
+  }
+  async function clearPhoto() {
+    setPhotoError('');
+    try {
+      await removeAvatar.mutateAsync();
+      await refreshPhoto();
+    } catch (error) {
+      setPhotoError(apiErrorMessage(error));
+    }
+  }
 
   useEffect(() => {
     if (profile.data && draft === null) {
@@ -88,6 +127,20 @@ export default function EditProfilePage() {
   useEffect(() => {
     if (skills.data && selected === null) setSelected(skills.data.skills);
   }, [skills.data, selected]);
+  const editorReady =
+    draft !== null &&
+    selected !== null &&
+    !profile.isPending &&
+    !skills.isPending &&
+    !experiences.isPending &&
+    !education.isPending;
+  useEffect(() => {
+    if (!editorReady || !location.hash) return;
+    const timeout = window.setTimeout(() => {
+      document.getElementById(location.hash.slice(1))?.scrollIntoView?.({ block: 'start' });
+    }, 0);
+    return () => window.clearTimeout(timeout);
+  }, [editorReady, location.hash]);
 
   const queries = [profile, skills, experiences, education];
   if (queries.some((query) => query.isError))
@@ -255,10 +308,47 @@ export default function EditProfilePage() {
         </section>
         <section className="profile-edit-section" aria-labelledby="edit-photo">
           <h2 id="edit-photo">Profile image</h2>
-          <p>
-            Image upload is unavailable until secure storage is configured. Your initials appear in the
-            meantime.
-          </p>
+          <div className="profile-photo-editor">
+            <span className="profile-photo-preview" role="img" aria-label="Current profile photo">
+              {profile.data?.profile?.avatarUrl ? (
+                <img src={mediaUrl(profile.data.profile.avatarUrl)} alt="" />
+              ) : (
+                draft.fullName.trim().charAt(0).toUpperCase()
+              )}
+            </span>
+            <div className="profile-photo-actions">
+              <label className="profile-photo-upload">
+                Upload photo
+                <input
+                  className="sr-only"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  aria-label="Upload profile photo"
+                  disabled={uploadAvatar.isPending || removeAvatar.isPending}
+                  onChange={(event) => {
+                    void choosePhoto(event.target.files?.[0] ?? null);
+                    event.target.value = '';
+                  }}
+                />
+              </label>
+              {profile.data?.profile?.avatarUrl && (
+                <button
+                  type="button"
+                  disabled={uploadAvatar.isPending || removeAvatar.isPending}
+                  onClick={() => void clearPhoto()}
+                >
+                  Remove photo
+                </button>
+              )}
+              <small>JPEG, PNG, or WebP · up to 8 MB</small>
+            </div>
+          </div>
+          {(uploadAvatar.isPending || removeAvatar.isPending) && <p role="status">Updating photo…</p>}
+          {photoError && (
+            <p role="alert" className="form-alert">
+              {photoError}
+            </p>
+          )}
         </section>
         {message && (
           <p className="onboarding-alert" role="alert">
@@ -298,6 +388,12 @@ export default function EditProfilePage() {
           confirmDeletion
         />
       </section>
+      {profile.data?.profile && (
+        <>
+          <PortfolioManager />
+          <ProfileSectionOrder initial={profile.data.profile.sectionOrder} />
+        </>
+      )}
     </div>
   );
 }

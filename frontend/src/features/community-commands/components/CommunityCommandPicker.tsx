@@ -16,6 +16,9 @@ export default function CommunityCommandPicker({
   const matches = value.startsWith('/')
     ? commands.filter((item) => item.command.startsWith(value.toLowerCase()))
     : [];
+  const defaultCommand =
+    commands.find((item) => item.id === 'discussion' && item.enabled) ??
+    commands.find((item) => item.enabled);
   const choose = (item: CommandMetadata) => {
     if (!item.enabled) return;
     setValue('');
@@ -26,6 +29,7 @@ export default function CommunityCommandPicker({
   };
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'Escape') {
+      if (open || error) event.stopPropagation();
       setOpen(false);
       setError('');
       return;
@@ -48,33 +52,73 @@ export default function CommunityCommandPicker({
   };
   return (
     <div className="command-picker">
-      <label htmlFor="community-command-input">Choose a structured action</label>
-      <input
-        id="community-command-input"
-        ref={input}
-        type="text"
-        role="combobox"
-        autoComplete="off"
-        aria-autocomplete="list"
-        aria-expanded={open && value.startsWith('/')}
-        aria-controls="community-command-options"
-        aria-activedescendant={open && matches[active] ? `command-option-${matches[active].id}` : undefined}
-        value={value}
-        placeholder="Type / to browse actions"
-        onFocus={() => {
-          if (value.startsWith('/')) setOpen(true);
-        }}
-        onChange={(event) => {
-          const next = event.target.value;
-          setValue(next);
-          setOpen(next.startsWith('/'));
-          setActive(0);
-          setError(
-            next && !next.startsWith('/') ? 'Community actions start with /. There is no open chat.' : ''
-          );
-        }}
-        onKeyDown={onKeyDown}
-      />
+      <label htmlFor="community-command-input">Choose a command to contribute to this community</label>
+      <div className="command-picker-row">
+        <div className="command-picker-field">
+          <input
+            id="community-command-input"
+            ref={input}
+            type="text"
+            role="combobox"
+            aria-label="Choose a structured action"
+            autoComplete="off"
+            aria-autocomplete="list"
+            aria-expanded={open && value.startsWith('/')}
+            aria-controls="community-command-options"
+            aria-activedescendant={
+              open && matches[active] ? `command-option-${matches[active].id}` : undefined
+            }
+            value={value}
+            placeholder={
+              defaultCommand
+                ? `${defaultCommand.command} — ${defaultCommand.description}`
+                : 'Type / to browse actions'
+            }
+            onFocus={() => {
+              if (value.startsWith('/')) setOpen(true);
+            }}
+            onChange={(event) => {
+              const next = event.target.value;
+              setValue(next);
+              setOpen(next.startsWith('/'));
+              setActive(0);
+              setError(
+                next && !next.startsWith('/') ? 'Community actions start with /. There is no open chat.' : ''
+              );
+            }}
+            onKeyDown={onKeyDown}
+          />
+          <button
+            type="button"
+            className="command-picker-browse"
+            aria-label="Browse commands"
+            onClick={() => {
+              setValue('/');
+              setOpen(true);
+              setActive(0);
+              input.current?.focus();
+            }}
+          >
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="m5 9 7 7 7-7" />
+            </svg>
+          </button>
+        </div>
+        <button
+          type="button"
+          className="command-picker-send"
+          aria-label="Start selected command"
+          disabled={value.startsWith('/') ? !matches[active]?.enabled : !defaultCommand}
+          onClick={() => {
+            const chosen = value.startsWith('/') ? matches[active] : defaultCommand;
+            if (chosen?.enabled) choose(chosen);
+          }}
+        >
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M5 12h14m-6-6 6 6-6 6" />
+          </svg>
+        </button>
+      </div>
       {open && value.startsWith('/') && (
         <ul id="community-command-options" role="listbox" className="command-options">
           {matches.length === 0 ? (

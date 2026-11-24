@@ -8,15 +8,12 @@ import { communityApi } from '@/features/communities/api/communityApi';
 import { resourceApi } from '../api/resourceApi';
 import ResourceCommandForm from '../components/ResourceCommandForm';
 import CommunityResourcesPage from './CommunityResourcesPage';
-import MyResourcesPage from './MyResourcesPage';
 import ResourceDetailPage from './ResourceDetailPage';
 
 vi.mock('@/features/communities/api/communityApi', () => ({ communityApi: { detail: vi.fn() } }));
 vi.mock('../api/resourceApi', () => ({
   resourceApi: {
-    capabilities: vi.fn(),
     community: vi.fn(),
-    mine: vi.fn(),
     detail: vi.fn(),
     edit: vi.fn(),
     remove: vi.fn(),
@@ -87,9 +84,7 @@ function mount(path: string, element: React.ReactNode) {
             path={
               path.startsWith('/app/communities/')
                 ? '/app/communities/:slug/resources'
-                : path.includes('/resources/')
-                  ? '/app/resources/:resourceId'
-                  : '/app/resources'
+                : '/app/resources/:resourceId'
             }
             element={element}
           />
@@ -101,16 +96,7 @@ function mount(path: string, element: React.ReactNode) {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(communityApi.detail).mockResolvedValue({ community });
-  vi.mocked(resourceApi.capabilities).mockResolvedValue({
-    uploadAvailable: false,
-    publicationAvailable: false,
-    scanningAvailable: false,
-    previewAvailable: false,
-    maxFileBytes: 10485760,
-    maxFilesPerResource: 1
-  });
   vi.mocked(resourceApi.community).mockResolvedValue(page);
-  vi.mocked(resourceApi.mine).mockResolvedValue({ items: [], hasMore: false, nextCursor: null });
   vi.mocked(resourceApi.detail).mockResolvedValue({ resource });
   vi.mocked(resourceApi.reports).mockResolvedValue({ items: [], hasMore: false, nextCursor: null });
   vi.mocked(resourceApi.report).mockResolvedValue({
@@ -159,11 +145,6 @@ describe('resource foundation UI', () => {
         expect.objectContaining({ category: 'interview-preparation' })
       )
     );
-  });
-  it('shows My Resources empty state and explicit storage limitation', async () => {
-    mount('/app/resources', <MyResourcesPage />);
-    expect(await screen.findByText('You have not shared any resources yet.')).toBeTruthy();
-    expect(screen.getByText(/Document upload and publication are unavailable/)).toBeTruthy();
   });
   it('shows detail and report action while withholding unauthorized owner controls', async () => {
     mount(`/app/resources/${resource.id}`, <ResourceDetailPage />);

@@ -29,12 +29,19 @@ vi.mock('../api/profileApi', () => ({
   profileApi: {
     own: vi.fn(),
     save: vi.fn(),
+    uploadAvatar: vi.fn(),
+    removeAvatar: vi.fn(),
+    uploadCover: vi.fn(),
+    removeCover: vi.fn(),
     skills: vi.fn(),
     saveSkills: vi.fn(),
     interests: vi.fn(),
     experiences: vi.fn(),
     educations: vi.fn(),
-    public: vi.fn()
+    public: vi.fn(),
+    ownRating: vi.fn(),
+    rating: vi.fn(),
+    saveRating: vi.fn()
   }
 }));
 vi.mock('@/features/onboarding/api/onboardingApi', () => ({
@@ -153,11 +160,18 @@ beforeEach(() => {
   experiences = [];
   education = [];
   vi.mocked(profileApi.own).mockResolvedValue({ profile });
+  vi.mocked(profileApi.uploadAvatar).mockResolvedValue({ avatarUrl: `/api/v1/media/${'e'.repeat(24)}` });
+  vi.mocked(profileApi.removeAvatar).mockResolvedValue({ avatarUrl: null });
+  vi.mocked(profileApi.uploadCover).mockResolvedValue({ coverUrl: `/api/v1/media/${'d'.repeat(24)}` });
+  vi.mocked(profileApi.removeCover).mockResolvedValue({ coverUrl: null });
   vi.mocked(profileApi.skills).mockResolvedValue({ skills: [typescript] });
   vi.mocked(profileApi.interests).mockResolvedValue({ interests: [] });
   vi.mocked(profileApi.experiences).mockImplementation(async () => ({ experiences: [...experiences] }));
   vi.mocked(profileApi.educations).mockImplementation(async () => ({ educations: [...education] }));
   vi.mocked(profileApi.save).mockResolvedValue({ profile });
+  vi.mocked(profileApi.ownRating).mockResolvedValue({ average: null, count: 0 });
+  vi.mocked(profileApi.rating).mockResolvedValue({ average: null, count: 0, myRating: null });
+  vi.mocked(profileApi.saveRating).mockResolvedValue({ average: 4, count: 1, myRating: 4 });
   vi.mocked(profileApi.saveSkills).mockResolvedValue({ skills: [typescript, python] });
   vi.mocked(profileApi.public).mockResolvedValue({
     profile,
@@ -246,8 +260,13 @@ describe('professional profile screens', () => {
     renderPage('/app/profile');
     expect(await screen.findByText('Accessibility toolkit')).toBeTruthy();
     expect(screen.getByText('Cloud Engineer')).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'View as visitor' }).getAttribute('href')).toBe('/u/ada-dev');
+    expect(screen.getByText('View as visitor').getAttribute('href')).toBe('/u/ada-dev');
     expect(screen.getByRole('link', { name: 'Live project' })).toHaveProperty('rel', 'noopener noreferrer');
+    expect(screen.getByRole('link', { name: 'Add project' }).getAttribute('href')).toContain(
+      '/app/profile/edit#profile-projects-editor'
+    );
+    fireEvent.click(screen.getByRole('link', { name: 'Add project' }));
+    expect(await screen.findByRole('heading', { name: 'Manage projects' })).toBeTruthy();
   });
   it('renders saved owner details and real sidebar navigation', () => {
     renderPage('/app/profile', true);
@@ -256,7 +275,35 @@ describe('professional profile screens', () => {
     expect(screen.getAllByText('TypeScript').length).toBeGreaterThan(0);
     expect(screen.getByRole('link', { name: 'GitHub' })).toHaveProperty('rel', 'noopener noreferrer');
     expect(screen.getByRole('link', { name: 'Profile' }).getAttribute('aria-current')).toBe('page');
-    expect(screen.getByRole('link', { name: 'View profile' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'View profile for Ada Developer' })).toBeTruthy();
+  });
+
+  it('shows the compact profile layout and uploads a cover image', async () => {
+    renderPage('/app/profile');
+    expect(await screen.findByRole('heading', { name: 'Ada Developer', level: 1 })).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'Professional Links' })).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'Skills' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Edit profile' })).toHaveProperty('href');
+    expect(screen.getByText('I build useful software.').closest('.profile-summary')).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'About' })).toBeNull();
+    const file = new File(['cover'], 'cover.png', { type: 'image/png' });
+    fireEvent.change(screen.getByLabelText('Choose cover image'), { target: { files: [file] } });
+    await waitFor(() => expect(profileApi.uploadCover).toHaveBeenCalledWith(file, expect.anything()));
+  });
+
+  it('keeps profile management controls in the editor instead of below the profile', async () => {
+    renderPage('/app/profile');
+    expect(await screen.findByRole('heading', { name: 'Ada Developer' })).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Profile completeness' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Manage certifications' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Manage projects' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Section order' })).toBeNull();
+    cleanup();
+    renderPage('/app/profile/edit');
+    expect(await screen.findByRole('heading', { name: 'Manage certifications' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Manage projects' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Section order' })).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Profile completeness' })).toBeNull();
   });
 
   it('prefills the edit form and validates unsafe links', async () => {
@@ -270,6 +317,14 @@ describe('professional profile screens', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save profile' }));
     expect(screen.getByLabelText('GitHub profile URL').getAttribute('aria-invalid')).toBe('true');
     expect(profileApi.save).not.toHaveBeenCalled();
+  });
+
+  it('uploads a profile photo from the editor', async () => {
+    renderPage('/app/profile/edit');
+    await screen.findByDisplayValue('Software Engineer');
+    const file = new File(['photo'], 'avatar.png', { type: 'image/png' });
+    fireEvent.change(screen.getByLabelText('Upload profile photo'), { target: { files: [file] } });
+    await waitFor(() => expect(profileApi.uploadAvatar).toHaveBeenCalledWith(file, expect.anything()));
   });
 
   it('saves an edited profile and returns to the profile page', async () => {
@@ -389,8 +444,23 @@ describe('professional profile screens', () => {
   });
 
   it('renders a public profile and handles missing profiles', async () => {
+    vi.mocked(profileApi.public).mockResolvedValue({
+      profile: {
+        username: profile.username,
+        fullName: profile.fullName,
+        headline: profile.headline,
+        bio: profile.bio,
+        country: profile.country,
+        city: profile.city,
+        githubUrl: profile.githubUrl
+      },
+      skills: [typescript],
+      experiences: [],
+      education: []
+    });
     renderPage('/app/professionals/ada-dev');
     expect(await screen.findByRole('heading', { name: 'Ada Developer' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Share' })).toBeTruthy();
     fireEvent.click(await screen.findByRole('button', { name: 'Connect' }));
     await waitFor(() =>
       expect(connectionApi.send).toHaveBeenCalledWith({ recipientUsername: 'ada-dev' }, expect.anything())
@@ -399,5 +469,20 @@ describe('professional profile screens', () => {
     vi.mocked(profileApi.public).mockRejectedValue({ isAxiosError: true, response: { status: 404 } });
     renderPage('/app/professionals/missing-user');
     expect(await screen.findByText('This professional profile is unavailable.')).toBeTruthy();
+  });
+  it('shows the average rating and lets another professional give stars', async () => {
+    vi.mocked(profileApi.public).mockResolvedValue({
+      profile,
+      rating: { average: 3.5, count: 2 },
+      skills: [typescript],
+      experiences: [],
+      education: []
+    });
+    renderPage('/app/professionals/ada-dev');
+    expect(await screen.findByText('3.5')).toBeTruthy();
+    const form = await screen.findByRole('region', { name: 'Rate this professional' });
+    fireEvent.click(within(form).getByRole('button', { name: 'Rate 4 stars' }));
+    await waitFor(() => expect(profileApi.saveRating).toHaveBeenCalledWith('ada-dev', 4));
+    expect(await within(form).findByText('Rating saved.')).toBeTruthy();
   });
 });

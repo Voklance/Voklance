@@ -242,7 +242,155 @@ export const interestSeeds: CatalogSeed[] = [
   { name: 'Cybersecurity', slug: 'cybersecurity', category: 'Technology' },
   { name: 'Cloud Computing', slug: 'cloud-computing', category: 'Technology' },
   { name: 'Career Opportunities', slug: 'career-opportunities', category: 'Career' },
-  { name: 'Entrepreneurship', slug: 'entrepreneurship', category: 'Business' }
+  { name: 'Entrepreneurship', slug: 'entrepreneurship', category: 'Business' },
+  ...Object.entries({
+    Technology: [
+      'Mobile App Development',
+      'Web Development',
+      'Game Development',
+      'Open Source',
+      'DevOps',
+      'Site Reliability Engineering',
+      'Software Architecture',
+      'API Development',
+      'Blockchain',
+      'Internet of Things',
+      'Robotics',
+      'Augmented Reality',
+      'Virtual Reality',
+      'Quantum Computing',
+      'Privacy Engineering',
+      'Quality Assurance',
+      'Test Automation'
+    ],
+    'Data and AI': [
+      'Data Analytics',
+      'Data Engineering',
+      'Data Visualization',
+      'Business Intelligence',
+      'Generative AI',
+      'Natural Language Processing',
+      'Computer Vision',
+      'MLOps',
+      'Responsible AI'
+    ],
+    Design: [
+      'UI Design',
+      'UX Design',
+      'Graphic Design',
+      'Product Design',
+      'User Research',
+      'Design Systems',
+      'Accessibility',
+      'Motion Design',
+      'Industrial Design',
+      'Architecture'
+    ],
+    Business: [
+      'Startups',
+      'Product Management',
+      'Project Management',
+      'Business Development',
+      'Operations',
+      'Strategy',
+      'Leadership',
+      'Consulting',
+      'E-commerce',
+      'Customer Success',
+      'Sales'
+    ],
+    Career: [
+      'Professional Networking',
+      'Mentorship',
+      'Career Development',
+      'Job Search',
+      'Internships',
+      'Freelancing',
+      'Remote Work',
+      'Public Speaking',
+      'Personal Branding',
+      'Interview Preparation',
+      'Workplace Culture'
+    ],
+    Marketing: [
+      'Digital Marketing',
+      'Content Marketing',
+      'Social Media Marketing',
+      'Search Engine Optimization',
+      'Branding',
+      'Growth Marketing',
+      'Market Research',
+      'Public Relations'
+    ],
+    Finance: [
+      'Personal Finance',
+      'Financial Technology',
+      'Investing',
+      'Accounting',
+      'Financial Planning',
+      'Venture Capital',
+      'Economics'
+    ],
+    Engineering: [
+      'Mechanical Engineering',
+      'Electrical Engineering',
+      'Civil Engineering',
+      'Aerospace Engineering',
+      'Manufacturing',
+      'Renewable Energy',
+      'Automotive Technology'
+    ],
+    Science: [
+      'Scientific Research',
+      'Biotechnology',
+      'Environmental Science',
+      'Space Exploration',
+      'Mathematics',
+      'Physics'
+    ],
+    Healthcare: [
+      'Digital Health',
+      'Public Health',
+      'Mental Health',
+      'Healthcare Innovation',
+      'Medical Research',
+      'Nutrition'
+    ],
+    Creative: [
+      'Writing',
+      'Photography',
+      'Filmmaking',
+      'Animation',
+      'Music Production',
+      'Podcasting',
+      'Content Creation'
+    ],
+    Education: [
+      'Teaching',
+      'Online Learning',
+      'EdTech',
+      'Skill Development',
+      'Academic Research',
+      'Language Learning'
+    ],
+    Community: [
+      'Community Building',
+      'Volunteering',
+      'Social Impact',
+      'Diversity and Inclusion',
+      'Nonprofit Work',
+      'Sustainability'
+    ]
+  }).flatMap(([category, names]) =>
+    names.map((name) => ({
+      name,
+      slug: name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, ''),
+      category
+    }))
+  )
 ];
 
 export function catalogUpserts(seeds: CatalogSeed[]) {

@@ -194,6 +194,13 @@ describe('interests API', () => {
     const response = await first.get('/api/v1/interests?search=cloud&limit=10');
     expect(response.status).toBe(200);
     expect(response.body.data.items.map((item: { slug: string }) => item.slug)).toEqual(['cloud-computing']);
+    const mentorResults = await first.get('/api/v1/interests?search=mentor');
+    expect(mentorResults.body.data.items.map((item: { slug: string }) => item.slug)).toEqual(['mentorship']);
+    const healthcareResults = await first.get('/api/v1/interests?category=Healthcare&limit=50');
+    expect(healthcareResults.body.data.items.map((item: { slug: string }) => item.slug)).toContain(
+      'mental-health'
+    );
+    expect((await first.get('/api/v1/interests?limit=50')).body.data.total).toBeGreaterThan(100);
     expect((await first.get('/api/v1/interests?page=0')).status).toBe(400);
   });
 

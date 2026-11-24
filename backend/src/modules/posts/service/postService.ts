@@ -1,15 +1,25 @@
-import type { CommentPage, FeedComment, FeedPage, FeedPost, PostAuthor } from '@voklance/shared';
+import type {
+  CommentPage,
+  FeedComment,
+  FeedPage,
+  FeedPost,
+  PostAuthor,
+  PostReaction
+} from '@voklance/shared';
 import { Types } from 'mongoose';
 import { AppError } from '../../../common/AppError.js';
 import Profile from '../../profiles/model/Profile.js';
+import ProfessionalExperience from '../../profiles/model/ProfessionalExperience.js';
 import User from '../../users/model/User.js';
 import Post, { type PostRecord } from '../model/Post.js';
 import PostLike from '../model/PostLike.js';
+import PostFollow from '../model/PostFollow.js';
 import PostBookmark from '../model/PostBookmark.js';
 import Bookmark from '../../bookmarks/model/Bookmark.js';
 import { migrateLegacyPostBookmarks } from '../../bookmarks/service/legacyBookmarkMigration.js';
 import PostComment, { type PostCommentRecord } from '../model/PostComment.js';
 import { queueNotification } from '../../notifications/service/notificationOutbox.js';
+import { deleteMedia, type StoredMedia } from '../../media/mediaService.js';
 import type { PageQuery } from '../validation/postSchemas.js';
 
 type IdRecord = { _id: Types.ObjectId };
@@ -41,25 +51,38 @@ function beforeCursor(cursor: ReturnType<typeof decodeCursor>) {
       }
     : {};
 }
-async function publicAuthors(authorIds: Types.ObjectId[]) {
+async function publicAuthors(authorIds: Types.ObjectId[], viewerId?: string) {
   const ids = [...new Set(authorIds.map(idKey))];
-  const [users, profiles] = await Promise.all([
+  const [users, profiles, experiences] = await Promise.all([
     User.find({ _id: { $in: ids }, accountStatus: { $in: ['ACTIVE', null] }, onboardingStatus: 'COMPLETED' })
       .select('name')
       .lean(),
     Profile.find({ userId: { $in: ids } })
-      .select('userId username fullName headline visibility')
+      .select('userId username fullName headline avatarUrl visibility')
+      .lean(),
+    ProfessionalExperience.find({ userId: { $in: ids } })
+      .select('userId jobTitle isCurrent startDate')
+      .sort({ isCurrent: -1, startDate: -1 })
       .lean()
   ]);
   const profilesByUser = new Map(profiles.map((profile) => [idKey(profile.userId), profile]));
+  const rolesByUser = new Map<string, string>();
+  for (const experience of experiences) {
+    const id = idKey(experience.userId);
+    if (!rolesByUser.has(id)) rolesByUser.set(id, experience.jobTitle);
+  }
   return new Map(
     users.map((user) => {
       const profile = profilesByUser.get(idKey(user._id));
-      const publishedProfile = profile?.visibility === 'PUBLIC' ? profile : null;
+      const publishedProfile =
+        profile?.visibility === 'PUBLIC' || idKey(user._id) === viewerId ? profile : null;
       const author: PostAuthor = {
         name: publishedProfile?.fullName ?? user.name,
         username: publishedProfile?.username ?? null,
-        headline: publishedProfile?.headline ?? null
+        headline: publishedProfile
+          ? publishedProfile.headline || rolesByUser.get(idKey(user._id)) || null
+          : null,
+        ...(publishedProfile?.avatarUrl ? { avatarUrl: publishedProfile.avatarUrl } : {})
       };
       return [idKey(user._id), author];
     })
@@ -84,29 +107,43 @@ export async function getPost(viewerId: string, postId: string): Promise<FeedPos
 export async function decoratePosts(posts: (PostRecord & IdRecord)[], viewerId: string): Promise<FeedPost[]> {
   if (!posts.length) return [];
   const ids = posts.map((post) => post._id);
-  const [authors, likes, comments, myLikes, myBookmarks, unifiedBookmarks] = await Promise.all([
-    publicAuthors(posts.map((post) => post.authorId)),
-    PostLike.aggregate<{ _id: Types.ObjectId; count: number }>([
+  const [authors, likes, comments, myLikes, myBookmarks, unifiedBookmarks, follows] = await Promise.all([
+    publicAuthors(
+      posts.map((post) => post.authorId),
+      viewerId
+    ),
+    PostLike.aggregate<{ _id: { postId: Types.ObjectId; reaction: PostReaction | null }; count: number }>([
       { $match: { postId: { $in: ids } } },
-      { $group: { _id: '$postId', count: { $sum: 1 } } }
+      { $group: { _id: { postId: '$postId', reaction: '$reaction' }, count: { $sum: 1 } } }
     ]),
     PostComment.aggregate<{ _id: Types.ObjectId; count: number }>([
       { $match: { postId: { $in: ids }, deletedAt: null } },
       { $group: { _id: '$postId', count: { $sum: 1 } } }
     ]),
     PostLike.find({ postId: { $in: ids }, userId: viewerId })
-      .select('postId')
+      .select('postId reaction')
       .lean(),
     PostBookmark.find({ postId: { $in: ids }, userId: viewerId })
       .select('postId')
       .lean(),
     Bookmark.find({ entityType: 'post', entityId: { $in: ids }, userId: viewerId })
       .select('entityId')
+      .lean(),
+    PostFollow.find({ followerId: viewerId, followeeId: { $in: posts.map((post) => post.authorId) } })
+      .select('followeeId')
       .lean()
   ]);
-  const likeCounts = new Map(likes.map((item) => [idKey(item._id), item.count]));
+  const reactionCounts = new Map<string, Partial<Record<PostReaction, number>>>();
+  for (const item of likes) {
+    const key = idKey(item._id.postId);
+    const counts = reactionCounts.get(key) ?? {};
+    const reaction = item._id.reaction ?? 'like';
+    counts[reaction] = (counts[reaction] ?? 0) + item.count;
+    reactionCounts.set(key, counts);
+  }
   const commentCounts = new Map(comments.map((item) => [idKey(item._id), item.count]));
-  const liked = new Set(myLikes.map((item) => idKey(item.postId)));
+  const myReactions = new Map(myLikes.map((item) => [idKey(item.postId), item.reaction ?? 'like']));
+  const followed = new Set(follows.map((item) => idKey(item.followeeId)));
   const bookmarked = new Set([
     ...myBookmarks.map((item) => idKey(item.postId)),
     ...unifiedBookmarks.map((item) => idKey(item.entityId))
@@ -119,11 +156,29 @@ export async function decoratePosts(posts: (PostRecord & IdRecord)[], viewerId: 
         id: idKey(post._id),
         content: post.content,
         author,
+        ...(post.attachment?.fileId
+          ? {
+              attachment: {
+                id: post.attachment.fileId,
+                kind: post.attachment.kind,
+                url: `/api/v1/media/${post.attachment.fileId}`,
+                filename: post.attachment.filename,
+                mimeType: post.attachment.mimeType,
+                size: post.attachment.size
+              }
+            }
+          : {}),
         createdAt: post.createdAt.toISOString(),
         updatedAt: post.updatedAt.toISOString(),
-        likeCount: likeCounts.get(idKey(post._id)) ?? 0,
+        likeCount: Object.values(reactionCounts.get(idKey(post._id)) ?? {}).reduce<number>(
+          (total, count) => total + (count ?? 0),
+          0
+        ),
         commentCount: commentCounts.get(idKey(post._id)) ?? 0,
-        likedByMe: liked.has(idKey(post._id)),
+        likedByMe: myReactions.has(idKey(post._id)),
+        reactionByMe: myReactions.get(idKey(post._id)) ?? null,
+        reactionCounts: reactionCounts.get(idKey(post._id)) ?? {},
+        followingAuthor: followed.has(idKey(post.authorId)),
         bookmarkedByMe: bookmarked.has(idKey(post._id)),
         ownedByMe: idKey(post.authorId) === viewerId
       }
@@ -161,9 +216,21 @@ export async function listFeed(viewerId: string, page: PageQuery): Promise<FeedP
   };
 }
 
-export async function createPost(userId: string, content: string) {
-  const record = await Post.create({ authorId: userId, content, status: 'PUBLISHED' });
-  return (await decoratePosts([record], userId))[0];
+export async function createPost(userId: string, content: string, attachment?: StoredMedia) {
+  if (!content.trim() && !attachment)
+    throw new AppError(400, 'VALIDATION_ERROR', 'Add text or a file to your post.');
+  const record = await Post.create({
+    authorId: userId,
+    content,
+    ...(attachment ? { attachment } : {}),
+    status: 'PUBLISHED'
+  });
+  try {
+    return (await decoratePosts([record], userId))[0];
+  } catch (error) {
+    await Post.deleteOne({ _id: record._id });
+    throw error;
+  }
 }
 export async function editPost(userId: string, postId: string, content: string) {
   const record = await Post.findOneAndUpdate(
@@ -181,14 +248,20 @@ export async function deletePost(userId: string, postId: string) {
     { new: true, runValidators: false }
   );
   if (!record) throw unavailable();
+  if (record.attachment?.fileId) await deleteMedia(record.attachment.fileId);
 }
-export async function toggleLike(userId: string, postId: string, desired: boolean) {
+export async function toggleLike(
+  userId: string,
+  postId: string,
+  desired: boolean,
+  reaction: PostReaction = 'like'
+) {
   const post = await requirePublishedPost(postId);
   if (desired) {
     try {
       const result = await PostLike.updateOne(
         { postId, userId },
-        { $setOnInsert: { postId, userId } },
+        { $set: { reaction }, $setOnInsert: { postId, userId } },
         { upsert: true }
       );
       if (result.upsertedCount)
@@ -204,7 +277,24 @@ export async function toggleLike(userId: string, postId: string, desired: boolea
       if (!isDuplicateKey(error)) throw error;
     }
   } else await PostLike.deleteOne({ postId, userId });
-  return { likedByMe: desired, likeCount: await PostLike.countDocuments({ postId }) };
+  return {
+    likedByMe: desired,
+    reactionByMe: desired ? reaction : null,
+    likeCount: await PostLike.countDocuments({ postId })
+  };
+}
+export async function toggleFollow(userId: string, postId: string, desired: boolean) {
+  const post = await requirePublishedPost(postId);
+  const followeeId = idKey(post.authorId);
+  if (followeeId === userId) throw new AppError(400, 'INVALID_FOLLOW', 'You cannot follow yourself.');
+  if (desired)
+    await PostFollow.updateOne(
+      { followerId: userId, followeeId },
+      { $setOnInsert: { followerId: userId, followeeId } },
+      { upsert: true }
+    );
+  else await PostFollow.deleteOne({ followerId: userId, followeeId });
+  return { followingAuthor: desired };
 }
 export async function toggleBookmark(userId: string, postId: string, desired: boolean) {
   await requirePublishedPost(postId);

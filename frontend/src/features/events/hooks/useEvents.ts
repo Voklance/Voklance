@@ -1,15 +1,6 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { RSVPResponse } from '@voklance/shared';
-import { eventApi, type EventFilters } from '../api/eventApi';
-
-export function useEvents(filters: Omit<EventFilters, 'cursor'>) {
-  return useInfiniteQuery({
-    queryKey: ['events', filters],
-    queryFn: ({ pageParam }) => eventApi.list({ ...filters, cursor: pageParam || undefined }),
-    initialPageParam: '' as string,
-    getNextPageParam: (page) => page.nextCursor ?? undefined
-  });
-}
+import { eventApi } from '../api/eventApi';
 export function useCommunityEvents(communityId: string) {
   return useQuery({
     queryKey: ['events', 'community', communityId],

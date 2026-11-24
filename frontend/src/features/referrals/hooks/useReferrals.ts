@@ -6,8 +6,7 @@ export const referralKeys = {
   need: (id: string) => ['referrals', 'need', id] as const,
   responses: (kind: 'applications' | 'offers', id: string) => ['referrals', kind, id] as const,
   community: (kind: 'opportunities' | 'needs', id: string, status?: string) =>
-    ['referrals', 'community', kind, id, status ?? 'all'] as const,
-  mine: (section: string) => ['referrals', 'mine', section] as const
+    ['referrals', 'community', kind, id, status ?? 'all'] as const
 };
 const next = <T>(page: { hasMore: boolean; nextCursor: string | null; items: T[] }) =>
   page.hasMore ? (page.nextCursor ?? undefined) : undefined;
@@ -55,38 +54,6 @@ export function useCommunityNeeds(id: string, status?: string) {
     initialPageParam: '' as string,
     getNextPageParam: next,
     enabled: !!id
-  });
-}
-export function useMyOpportunities() {
-  return useInfiniteQuery({
-    queryKey: referralKeys.mine('opportunities'),
-    queryFn: ({ pageParam }) => referralApi.myOpportunities(pageParam),
-    initialPageParam: '' as string,
-    getNextPageParam: next
-  });
-}
-export function useMyNeeds() {
-  return useInfiniteQuery({
-    queryKey: referralKeys.mine('needs'),
-    queryFn: ({ pageParam }) => referralApi.myNeeds(pageParam),
-    initialPageParam: '' as string,
-    getNextPageParam: next
-  });
-}
-export function useMyApplications() {
-  return useInfiniteQuery({
-    queryKey: referralKeys.mine('applications'),
-    queryFn: ({ pageParam }) => referralApi.myApplications(pageParam),
-    initialPageParam: '' as string,
-    getNextPageParam: next
-  });
-}
-export function useMyOffers() {
-  return useInfiniteQuery({
-    queryKey: referralKeys.mine('offers'),
-    queryFn: ({ pageParam }) => referralApi.myOffers(pageParam),
-    initialPageParam: '' as string,
-    getNextPageParam: next
   });
 }
 export function useReferralActions() {

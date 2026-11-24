@@ -54,6 +54,16 @@ const payloads = {
     locationType: 'in_person',
     locationOrUrl: 'Pune, India',
     capacity: 50
+  },
+  discussion: {
+    title: 'State management patterns',
+    body: 'How do you choose state management tools for a growing React application?'
+  },
+  resource: {
+    title: 'React architecture guide',
+    description: 'A useful guide to building scalable React applications.',
+    category: 'learning-material',
+    url: 'https://example.com/react-guide.pdf'
   }
 } as const;
 async function signup(name: string) {
@@ -126,6 +136,7 @@ describe('structured community commands', () => {
       '/needreferral',
       '/event',
       '/meetup',
+      '/discussion',
       '/resource'
     ]);
     expect(response.body.data.commands[0]).not.toHaveProperty('schema');
@@ -139,8 +150,15 @@ describe('structured community commands', () => {
     ).toBe(403);
   });
 
-  it('persists all four validated activity types and derives author identity from session', async () => {
-    for (const command of ['referral', 'needreferral', 'event', 'meetup'] as const) {
+  it('persists validated activity types and derives author identity from session', async () => {
+    for (const command of [
+      'referral',
+      'needreferral',
+      'event',
+      'meetup',
+      'discussion',
+      'resource'
+    ] as const) {
       const response = await publish(publicId, owner.cookie, command, payloads[command]);
       expect(response.status).toBe(201);
       expect(response.body.data.activity.command).toBe(command);
@@ -149,13 +167,14 @@ describe('structured community commands', () => {
         username: 'command-owner'
       });
       expect(response.body.data.activity.author).not.toHaveProperty('email');
+      if (command === 'resource') expect(response.body.data.activity.payload.tags).toEqual([]);
       if (command === 'referral') activityId = response.body.data.activity.id;
     }
-    expect(await CommunityActivity.countDocuments({ communityId: publicId, status: 'ACTIVE' })).toBe(4);
+    expect(await CommunityActivity.countDocuments({ communityId: publicId, status: 'ACTIVE' })).toBe(6);
     expect(
       (await request(app).get(`/api/v1/communities/${publicId}/activities`).set('Cookie', member.cookie)).body
         .data.items
-    ).toHaveLength(4);
+    ).toHaveLength(6);
   });
 
   it('rejects arbitrary chat, unknown or disabled commands, bad versions, invalid payloads and mass assignment', async () => {
@@ -182,6 +201,30 @@ describe('structured community commands', () => {
         await publish(publicId, member.cookie, 'needreferral', {
           ...payloads.needreferral,
           message: '<script>alert(1)</script>'
+        })
+      ).status
+    ).toBe(400);
+    expect(
+      (
+        await publish(publicId, member.cookie, 'discussion', {
+          title: 'Question',
+          body: '<script>alert(1)</script>'
+        })
+      ).status
+    ).toBe(400);
+    expect(
+      (
+        await publish(publicId, member.cookie, 'resource', {
+          ...payloads.resource,
+          url: 'http://example.com/react-guide.pdf'
+        })
+      ).status
+    ).toBe(400);
+    expect(
+      (
+        await publish(publicId, member.cookie, 'resource', {
+          ...payloads.resource,
+          url: 'not a url'
         })
       ).status
     ).toBe(400);

@@ -3,10 +3,28 @@ import {
   eventPayloadSchema,
   meetupPayloadSchema,
   needReferralPayloadSchema,
-  referralPayloadSchema
+  referralPayloadSchema,
+  resourcePayloadSchema,
+  safeUrl
 } from './communityCommands.js';
 
 describe('community command payload contracts', () => {
+  it('returns validation errors for malformed URLs without throwing', () => {
+    for (const value of ['', 'not a url', 'https://']) {
+      const result = safeUrl.safeParse(value);
+      expect(result.success).toBe(false);
+      if (!result.success) expect(result.error.issues[0].message).toBe('Enter a valid HTTPS URL.');
+    }
+    expect(safeUrl.safeParse('http://example.com').success).toBe(false);
+    expect(
+      resourcePayloadSchema.safeParse({
+        title: 'React guide',
+        description: 'A practical guide to React patterns.',
+        category: 'learning-material',
+        url: 'not a url'
+      }).success
+    ).toBe(false);
+  });
   it('normalizes a valid referral and rejects unknown fields, markup, and unsafe links', () => {
     const payload = {
       jobTitle: ' Engineer ',

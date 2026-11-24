@@ -1,8 +1,35 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { onboardingKeys } from '@/features/onboarding/hooks/useOnboarding';
 import { profileApi } from '../api/profileApi';
 
-export const profileKeys = { public: (username: string) => ['profiles', 'public', username] as const };
+export const profileKeys = {
+  public: (username: string) => ['profiles', 'public', username] as const,
+  ownRating: ['profiles', 'me', 'rating'] as const,
+  rating: (username: string) => ['profiles', 'rating', username] as const
+};
+
+export function useMyRating() {
+  return useQuery({ queryKey: profileKeys.ownRating, queryFn: profileApi.ownRating });
+}
+
+export function usePublicRating(username: string) {
+  return useQuery({
+    queryKey: profileKeys.rating(username),
+    queryFn: () => profileApi.rating(username),
+    enabled: !!username
+  });
+}
+
+export function useSavePublicRating(username: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (stars: number) => profileApi.saveRating(username, stars),
+    onSuccess: (data) => {
+      client.setQueryData(profileKeys.rating(username), data);
+      void client.invalidateQueries({ queryKey: profileKeys.public(username) });
+    }
+  });
+}
 
 export function useMyProfile() {
   return useQuery({ queryKey: onboardingKeys.profile, queryFn: profileApi.own });

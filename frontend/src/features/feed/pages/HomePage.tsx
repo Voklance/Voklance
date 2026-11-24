@@ -1,36 +1,29 @@
 import CreatePostCard from '../components/CreatePostCard';
 import { useState } from 'react';
-import { Link } from 'react-router';
 import type { FeedMode } from '@voklance/shared';
 import RecommendedFeed from '@/features/recommendations/components/RecommendedFeed';
-import RecommendationSidebar from '@/features/recommendations/components/RecommendationSidebar';
 
 export default function HomePage() {
-  const [mode, setMode] = useState<FeedMode>('for-you');
+  const [mode, setMode] = useState<FeedMode>('recent');
   return (
-    <div className="feed-page">
+    <div className="feed-page feed-page-home">
       <header className="feed-page-heading">
         <h1>Professional feed</h1>
         <p>Ideas, lessons, and updates from Voklance professionals.</p>
       </header>
-      <CreatePostCard />
-      <nav className="feed-mode-tabs" aria-label="Feed view">
-        {(['for-you', 'following', 'recent'] as const).map((tab) => (
-          <button
-            type="button"
-            key={tab}
-            className={mode === tab ? 'active' : ''}
-            aria-current={mode === tab ? 'page' : undefined}
-            onClick={() => setMode(tab)}
-          >
-            {tab === 'for-you' ? 'For You' : tab === 'following' ? 'Following' : 'Recent'}
-          </button>
-        ))}
-        <Link to="/app/settings/feed">Feed interests</Link>
-      </nav>
-      <div className="personalized-feed-layout">
+      <div className="feed-stream">
+        <CreatePostCard />
+        <div className="feed-stream-toolbar">
+          <label>
+            Sort by:{' '}
+            <select value={mode} onChange={(event) => setMode(event.target.value as FeedMode)}>
+              <option value="recent">Newest</option>
+              <option value="for-you">For You</option>
+              <option value="following">Following</option>
+            </select>
+          </label>
+        </div>
         <RecommendedFeed mode={mode} />
-        <RecommendationSidebar />
       </div>
     </div>
   );

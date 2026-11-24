@@ -1,5 +1,6 @@
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { feedApi } from '../api/feedApi';
+import type { PostReaction } from '@voklance/shared';
 
 export const feedKeys = {
   feed: ['feed', 'home'] as const,
@@ -34,7 +35,12 @@ export function useFeedActions() {
     }),
     remove: useMutation({ mutationFn: feedApi.remove, onSuccess: refresh }),
     like: useMutation({
-      mutationFn: ({ id, desired }: { id: string; desired: boolean }) => feedApi.like(id, desired),
+      mutationFn: ({ id, desired, reaction }: { id: string; desired: boolean; reaction?: PostReaction }) =>
+        feedApi.like(id, desired, reaction),
+      onSuccess: refresh
+    }),
+    follow: useMutation({
+      mutationFn: ({ id, desired }: { id: string; desired: boolean }) => feedApi.follow(id, desired),
       onSuccess: refresh
     }),
     bookmark: useMutation({

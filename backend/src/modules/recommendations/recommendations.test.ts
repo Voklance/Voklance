@@ -93,6 +93,42 @@ describe('personalized recommendations', () => {
     const following = await request(app).get('/api/v1/feed/following').set(auth());
     expect(following.body.data.items.map((item: { id: string }) => item.id)).toEqual([connectedPostId]);
   });
+  it('includes followed authors in the following feed', async () => {
+    const followedPost = await Post.findOne({ authorId: accounts[2].id });
+    expect(followedPost).toBeTruthy();
+    const path = `/api/v1/posts/${followedPost!._id}/follow`;
+    expect((await request(app).put(path).set(auth())).status).toBe(200);
+    const following = await request(app).get('/api/v1/feed/following').set(auth());
+    expect(following.body.data.items.map((item: { id: string }) => item.id)).toContain(
+      followedPost!._id.toString()
+    );
+    expect((await request(app).delete(path).set(auth())).status).toBe(200);
+    const after = await request(app).get('/api/v1/feed/following').set(auth());
+    expect(after.body.data.items.map((item: { id: string }) => item.id)).not.toContain(
+      followedPost!._id.toString()
+    );
+  });
+  it('shows an author their new post even when their profile is private', async () => {
+    const created = await request(app)
+      .post('/api/v1/posts')
+      .set('Cookie', accounts[3].cookie)
+      .send({ content: 'My new private-profile post' });
+    expect(created.status).toBe(201);
+    const ownRecent = await request(app).get('/api/v1/feed/recent').set('Cookie', accounts[3].cookie);
+    expect(ownRecent.body.data.items[0]).toMatchObject({
+      id: created.body.data.post.id,
+      content: 'My new private-profile post',
+      ownedByMe: true
+    });
+    const ownFollowing = await request(app).get('/api/v1/feed/following').set('Cookie', accounts[3].cookie);
+    expect(
+      ownFollowing.body.data.items.some((item: { id: string }) => item.id === created.body.data.post.id)
+    ).toBe(true);
+    const otherRecent = await request(app).get('/api/v1/feed/recent').set(auth());
+    expect(
+      otherRecent.body.data.items.some((item: { id: string }) => item.id === created.body.data.post.id)
+    ).toBe(false);
+  });
   it('stores hide feedback, removes the post, and supports undo', async () => {
     const saved = await request(app)
       .post('/api/v1/recommendations/feedback')

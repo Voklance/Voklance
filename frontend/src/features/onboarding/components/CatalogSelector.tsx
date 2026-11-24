@@ -108,7 +108,9 @@ export default function CatalogSelector({
             <p className="onboarding-hint">
               {kind === 'skill' && !search.trim()
                 ? `Showing ${catalog.data.items.length} suggested skills. Search to find more.`
-                : `Showing ${catalog.data.items.length} of ${catalog.data.total} results. Refine your search to find more.`}
+                : kind === 'interest' && !search.trim()
+                  ? `Showing ${catalog.data.items.length} interests. Search to find more.`
+                  : `Showing ${catalog.data.items.length} of ${catalog.data.total} results. Refine your search to find more.`}
             </p>
           )}
           {kind === 'skill' && newSkill && !exactMatch && (

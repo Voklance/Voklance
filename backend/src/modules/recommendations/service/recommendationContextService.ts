@@ -7,16 +7,18 @@ import UserBlock from '../../messaging/model/UserBlock.js';
 import Skill from '../../skills/model/Skill.js';
 import UserSkill from '../../skills/model/UserSkill.js';
 import UserFeedPreference from '../model/UserFeedPreference.js';
+import PostFollow from '../../posts/model/PostFollow.js';
 
 export interface RecommendationContext {
   topics: string[];
   connectionIds: Set<string>;
+  followedUserIds: Set<string>;
   communityIds: Set<string>;
   excludedUserIds: Set<string>;
 }
 export async function recommendationContext(userId: string): Promise<RecommendationContext> {
   const id = new Types.ObjectId(userId);
-  const [preference, interests, skills, connections, memberships, blocks] = await Promise.all([
+  const [preference, interests, skills, connections, follows, memberships, blocks] = await Promise.all([
     UserFeedPreference.findOne({ userId: id }).select('topics').lean(),
     UserInterest.find({ userId: id }).select('interestId').limit(30).lean(),
     UserSkill.find({ userId: id }).select('skillId').limit(30).lean(),
@@ -24,6 +26,7 @@ export async function recommendationContext(userId: string): Promise<Recommendat
       .select('userLowId userHighId')
       .limit(500)
       .lean(),
+    PostFollow.find({ followerId: id }).select('followeeId').limit(500).lean(),
     CommunityMembership.find({ userId: id, status: 'ACTIVE' }).select('communityId').limit(500).lean(),
     UserBlock.find({ $or: [{ blockerId: id }, { blockedId: id }] })
       .select('blockerId blockedId')
@@ -54,6 +57,7 @@ export async function recommendationContext(userId: string): Promise<Recommendat
         row.userLowId.toString() === userId ? row.userHighId.toString() : row.userLowId.toString()
       )
     ),
+    followedUserIds: new Set(follows.map((row) => row.followeeId.toString())),
     communityIds: new Set(memberships.map((row) => row.communityId.toString())),
     excludedUserIds: new Set(
       blocks.map((row) =>

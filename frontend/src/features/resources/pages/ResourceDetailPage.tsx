@@ -117,7 +117,9 @@ export default function ResourceDetailPage() {
                 disabled={actions.remove.isPending}
                 onClick={() => {
                   if (window.confirm('Delete this resource?'))
-                    actions.remove.mutate(undefined, { onSuccess: () => navigate('/app/resources') });
+                    actions.remove.mutate(undefined, {
+                      onSuccess: () => navigate(`/app/communities/${resource.community.slug}/resources`)
+                    });
                 }}
               >
                 Delete resource

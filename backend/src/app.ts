@@ -38,6 +38,7 @@ import settingsRoutes from './modules/settings/routes/settingsRoutes.js';
 import bookmarkRoutes, { collectionRoutes } from './modules/bookmarks/routes/bookmarkRoutes.js';
 import activityRoutes from './modules/bookmarks/routes/activityRoutes.js';
 import portfolioRoutes from './modules/profiles/routes/portfolioRoutes.js';
+import mediaRoutes from './modules/media/mediaRoutes.js';
 
 const app = express();
 
@@ -67,6 +68,7 @@ app.use(`${API_V1_PREFIX}/users/me/experiences`, experienceRoutes);
 app.use(`${API_V1_PREFIX}/users/me/educations`, educationRoutes);
 app.use(`${API_V1_PREFIX}/onboarding`, onboardingRoutes);
 app.use(`${API_V1_PREFIX}/posts`, postRoutes);
+app.use(`${API_V1_PREFIX}/media`, mediaRoutes);
 app.use(`${API_V1_PREFIX}/users/me/bookmarks`, legacyPostBookmarkRoutes);
 app.use(`${API_V1_PREFIX}/communities`, commandRoutes);
 app.use(`${API_V1_PREFIX}/communities`, communityEventRoutes);

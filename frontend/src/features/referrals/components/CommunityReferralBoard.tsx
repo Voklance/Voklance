@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { Link } from 'react-router';
 import { ReferralNeedCard, ReferralOpportunityCard } from './ReferralCards';
 import { useCommunityNeeds, useCommunityOpportunities } from '../hooks/useReferrals';
 
@@ -18,7 +17,6 @@ export default function CommunityReferralBoard({ communityId }: { communityId: s
           <h2 id="community-referrals-title">Referrals in this community</h2>
           <p>Explore openings and requests from members. Response details stay private to participants.</p>
         </div>
-        <Link to="/app/referrals">My referrals</Link>
       </div>
       <div className="community-referral-columns">
         <section>

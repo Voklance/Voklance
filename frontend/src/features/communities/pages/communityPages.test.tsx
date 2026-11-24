@@ -6,6 +6,7 @@ import { MemoryRouter, Route, Routes } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ProfileSidebar from '@/components/shared/ProfileSidebar';
 import { profileApi } from '@/features/profiles/api/profileApi';
+import { portfolioApi } from '@/features/profiles/api/portfolioApi';
 import { communityApi } from '../api/communityApi';
 import { commandApi } from '@/features/community-commands/api/commandApi';
 import { referralApi } from '@/features/referrals/api/referralApi';
@@ -13,6 +14,8 @@ import { eventApi } from '@/features/events/api/eventApi';
 import CommunityDiscoveryPage from './CommunityDiscoveryPage';
 import CreateCommunityPage from './CreateCommunityPage';
 import CommunityDetailPage from './CommunityDetailPage';
+import CommunityChatPage from './CommunityChatPage';
+import CommunityInboxPage from './CommunityInboxPage';
 import CommunityMembersPage from './CommunityMembersPage';
 import CommunityRequestsPage from './CommunityRequestsPage';
 import CommunitySettingsPage from './CommunitySettingsPage';
@@ -35,7 +38,12 @@ vi.mock('../api/communityApi', () => ({
     archive: vi.fn()
   }
 }));
-vi.mock('@/features/profiles/api/profileApi', () => ({ profileApi: { own: vi.fn() } }));
+vi.mock('@/features/profiles/api/profileApi', () => ({
+  profileApi: { own: vi.fn(), skills: vi.fn(), experiences: vi.fn(), ownRating: vi.fn() }
+}));
+vi.mock('@/features/profiles/api/portfolioApi', () => ({
+  portfolioApi: { completeness: vi.fn() }
+}));
 vi.mock('@/features/community-commands/api/commandApi', () => ({
   commandApi: { commands: vi.fn(), activities: vi.fn(), submit: vi.fn(), remove: vi.fn() }
 }));
@@ -101,6 +109,8 @@ function renderRoute(path: string, sidebar = false) {
             <Route path="/app/communities" element={<CommunityDiscoveryPage />} />
             <Route path="/app/communities/create" element={<CreateCommunityPage />} />
             <Route path="/app/communities/:slug" element={<CommunityDetailPage />} />
+            <Route path="/app/communities/:slug/chat" element={<CommunityChatPage />} />
+            <Route path="/app/community-chat" element={<CommunityInboxPage />} />
             <Route path="/app/communities/:slug/members" element={<CommunityMembersPage />} />
             <Route path="/app/communities/:slug/requests" element={<CommunityRequestsPage />} />
             <Route path="/app/communities/:slug/settings" element={<CommunitySettingsPage />} />
@@ -141,6 +151,14 @@ beforeEach(() => {
   vi.mocked(communityApi.transfer).mockResolvedValue({ community: detail });
   vi.mocked(communityApi.archive).mockResolvedValue({ community: detail });
   vi.mocked(profileApi.own).mockResolvedValue({ profile: null });
+  vi.mocked(profileApi.skills).mockResolvedValue({ skills: [] });
+  vi.mocked(profileApi.experiences).mockResolvedValue({ experiences: [] });
+  vi.mocked(profileApi.ownRating).mockResolvedValue({ average: null, count: 0 });
+  vi.mocked(portfolioApi.completeness).mockResolvedValue({
+    percentage: 0,
+    completedSections: [],
+    suggestedSections: []
+  });
 });
 afterEach(cleanup);
 
@@ -233,6 +251,18 @@ describe('community screens', () => {
     expect(await screen.findByText('Request pending')).toBeTruthy();
     expect(screen.queryByText('Stay on topic.')).toBeNull();
   });
+  it('opens community chat from the community page and protects private conversations', async () => {
+    detail = { ...detail, membershipStatus: 'ACTIVE', myRole: 'MEMBER' };
+    renderRoute('/app/communities/react-professionals');
+    fireEvent.click(await screen.findByRole('link', { name: 'Open community chat' }));
+    expect(await screen.findByRole('log', { name: 'Community activity' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'React Professionals' })).toBeTruthy();
+    cleanup();
+    detail = { ...detail, visibility: 'PRIVATE', membershipStatus: null, myRole: null };
+    renderRoute('/app/communities/react-professionals/chat');
+    expect(await screen.findByText('Join this community to view its conversation.')).toBeTruthy();
+    expect(screen.queryByRole('log', { name: 'Community activity' })).toBeNull();
+  });
   it('lets active members leave and keeps unauthorized settings closed', async () => {
     detail = {
       ...detail,
@@ -300,12 +330,62 @@ describe('community screens', () => {
       )
     );
   });
-  it('shows joined communities from API in the existing sidebar', async () => {
+  it('shows joined community cards with real member counts in the sidebar', async () => {
     vi.mocked(communityApi.mine).mockResolvedValue(
-      page([{ ...summary, membershipStatus: 'ACTIVE', myRole: 'MEMBER' }])
+      page([
+        { ...summary, name: 'React Community', membershipStatus: 'ACTIVE', myRole: 'MEMBER' },
+        {
+          ...summary,
+          id: 'b'.repeat(24),
+          slug: 'javascript-masters',
+          name: 'JavaScript Masters',
+          memberCount: 18902,
+          membershipStatus: 'ACTIVE',
+          myRole: 'MEMBER'
+        }
+      ])
     );
     renderRoute('/app', true);
     const sidebar = screen.getByRole('complementary', { name: 'Your account and communities' });
-    expect(await within(sidebar).findByRole('link', { name: 'React Professionals' })).toBeTruthy();
+    const communities = within(sidebar).getByRole('region', { name: 'Your communities' });
+    expect(within(communities).getByRole('link', { name: 'Join' }).getAttribute('href')).toBe(
+      '/app/communities'
+    );
+    const react = await within(communities).findByRole('button', { name: 'Open React Community chat' });
+    expect(within(react).getByText('2 members')).toBeTruthy();
+    expect(react.querySelector('.devicon-react-original')).toBeTruthy();
+    const javascript = within(communities).getByRole('button', { name: 'Open JavaScript Masters chat' });
+    expect(within(javascript).getByText('18,902 members')).toBeTruthy();
+    expect(javascript.querySelector('.devicon-javascript-plain')).toBeTruthy();
+  });
+  it('opens a joined community chat from the conversation list', async () => {
+    vi.mocked(communityApi.mine).mockResolvedValue(page([
+      { ...summary, membershipStatus: 'ACTIVE', myRole: 'MEMBER' },
+      {
+        ...summary,
+        id: 'b'.repeat(24),
+        slug: 'node-developers',
+        name: 'Node Developers',
+        membershipStatus: 'ACTIVE',
+        myRole: 'MEMBER'
+      }
+    ]));
+    vi.mocked(communityApi.detail).mockImplementation(async (slug) => ({
+      community: {
+        ...detail,
+        slug,
+        name: slug === 'node-developers' ? 'Node Developers' : 'React Professionals',
+        membershipStatus: 'ACTIVE',
+        myRole: 'MEMBER'
+      }
+    }));
+    renderRoute('/app/community-chat');
+    expect(await screen.findByRole('heading', { name: 'React Professionals' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('link', { name: /Node Developers/ }));
+    expect(await screen.findByRole('heading', { name: 'Node Developers' })).toBeTruthy();
+    expect(communityApi.detail).toHaveBeenCalledWith('node-developers');
+    expect(screen.getByRole('link', { name: 'Create community' }).getAttribute('href')).toBe(
+      '/app/communities/create'
+    );
   });
 });

@@ -32,22 +32,27 @@ function RecommendedCard({ post }: { post: RecommendedPost }) {
     );
   return (
     <div className="recommended-post">
-      <div className="recommended-post-context">
-        <span>{post.reason}</span>
-        <div>
-          <button
-            type="button"
-            disabled={actions.feedback.isPending}
-            onClick={() => void hide('not_interested')}
-          >
-            Not interested
-          </button>
-          <button type="button" disabled={actions.feedback.isPending} onClick={() => void hide('hidden')}>
-            Hide
-          </button>
-        </div>
-      </div>
-      <PostCard post={post} />
+      <PostCard
+        post={post}
+        headerAction={
+          <details className="feed-post-menu">
+            <summary aria-label="Post options">···</summary>
+            <div>
+              <small>{post.reason}</small>
+              <button
+                type="button"
+                disabled={actions.feedback.isPending}
+                onClick={() => void hide('not_interested')}
+              >
+                Not interested
+              </button>
+              <button type="button" disabled={actions.feedback.isPending} onClick={() => void hide('hidden')}>
+                Hide post
+              </button>
+            </div>
+          </details>
+        }
+      />
       {error && <p role="alert">{error}</p>}
     </div>
   );

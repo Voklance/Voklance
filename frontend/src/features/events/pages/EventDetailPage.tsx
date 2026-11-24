@@ -65,8 +65,8 @@ export default function EventDetailPage() {
     actions.register.error || actions.cancelRegistration.error || actions.rsvp.error || actions.cancel.error;
   return (
     <div className="community-page event-page">
-      <Link className="community-back" to="/app/events">
-        Back to events
+      <Link className="community-back" to={`/app/communities/${event.community.slug}`}>
+        Back to community
       </Link>
       <header className="community-panel">
         <span className="command-activity-type">

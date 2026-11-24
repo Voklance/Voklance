@@ -5,12 +5,24 @@ import { profileApi } from '../api/profileApi';
 import { apiErrorMessage } from '@/lib/apiClient';
 
 export default function ProfileSectionOrder({ initial }: { initial?: ProfileSectionId[] }) {
+  const referenceOrder: ProfileSectionId[] = [
+    'experience',
+    'projects',
+    'education',
+    'certifications',
+    'links',
+    'skills',
+    'github'
+  ];
+  const isOriginalDefault = initial?.every((item, index) => item === PROFILE_SECTION_IDS[index]);
   const [items, setItems] = useState<ProfileSectionId[]>(
-    initial?.length === PROFILE_SECTION_IDS.length ? initial : [...PROFILE_SECTION_IDS]
+    initial?.length === PROFILE_SECTION_IDS.length && !isOriginalDefault
+      ? initial.filter((item) => item !== 'about')
+      : referenceOrder
   );
   const client = useQueryClient();
   const save = useMutation({
-    mutationFn: () => profileApi.save({ sectionOrder: items }),
+    mutationFn: () => profileApi.save({ sectionOrder: ['about', ...items] }),
     onSuccess: async () => {
       await client.invalidateQueries({ queryKey: ['onboarding'] });
       await client.invalidateQueries({ queryKey: ['profiles'] });
@@ -26,7 +38,7 @@ export default function ProfileSectionOrder({ initial }: { initial?: ProfileSect
   return (
     <section className="profile-section">
       <h2>Section order</h2>
-      <p>Choose how sections appear on your profile.</p>
+      <p>Choose the order of sections below your profile summary.</p>
       <ol className="section-order-list">
         {items.map((item, index) => (
           <li key={item}>

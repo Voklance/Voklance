@@ -8,6 +8,7 @@ import { usePublicProfile } from '../hooks/useProfileData';
 import ConnectionButton from '@/features/connections/components/ConnectionButton';
 import { useConnectionStatus, useVisibleConnections } from '@/features/connections/hooks/useNetwork';
 import StartConversationButton from '@/features/messaging/components/StartConversationButton';
+import { ProfileRatingForm } from '../components/ProfileRating';
 
 export default function PublicProfilePage() {
   const { username = '' } = useParams();
@@ -32,21 +33,22 @@ export default function PublicProfilePage() {
     <>
       <ProfileDetails
         profile={query.data.profile}
+        rating={query.data.rating}
         skills={query.data.skills}
         experiences={query.data.experiences}
         education={query.data.education}
         certifications={query.data.certifications}
         projects={query.data.projects}
+        actions={
+          network.data && !network.data.isSelf ? (
+            <>
+              <ConnectionButton username={username} status={network.data.status} />
+              {network.data.status === 'connected' && <StartConversationButton username={username} />}
+            </>
+          ) : undefined
+        }
       />
-      {!network.data?.isSelf && (
-        <div className="network-profile-action">
-          <ConnectionButton username={username} />
-          {network.data?.status === 'connected' && <StartConversationButton username={username} />}
-          {network.data?.connectionCount !== null && network.data?.connectionCount !== undefined && (
-            <p>{network.data.connectionCount} connections</p>
-          )}
-        </div>
-      )}
+      {network.data && !network.data.isSelf && <ProfileRatingForm username={username} />}
       {!network.data?.isSelf &&
         network.data?.connectionCount !== null &&
         network.data?.connectionCount !== undefined &&

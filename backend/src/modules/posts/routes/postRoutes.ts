@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { rateLimit } from 'express-rate-limit';
 import { sendFailure, sendSuccess } from '../../../common/apiResponse.js';
+import { AppError } from '../../../common/AppError.js';
+import { POST_CONTENT_LIMIT } from '@voklance/shared';
 import { requireAllowedOrigin } from '../../../middleware/requireAllowedOrigin.js';
 import { requireAuth, authenticatedUser } from '../../../middleware/requireAuth.js';
 import { requireCompletedOnboarding } from '../../../middleware/requireCompletedOnboarding.js';
@@ -21,6 +23,7 @@ import {
   listComments,
   listFeed,
   toggleBookmark,
+  toggleFollow,
   toggleLike
 } from '../service/postService.js';
 import {
@@ -30,8 +33,10 @@ import {
   postBody,
   postParams,
   postPatch,
+  reactionBody,
   type PageQuery
 } from '../validation/postSchemas.js';
+import { deleteMedia, parseMediaForm, removeTempFile, saveMedia } from '../../media/mediaService.js';
 
 const writeLimit = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -60,8 +65,30 @@ const page = (request: { validatedQuery?: unknown }) => request.validatedQuery a
 router.get('/', validateQuery(pageQuery), async (request, response) => {
   sendSuccess(response, await listFeed(userId(request), page(request)), 'Feed loaded');
 });
-router.post('/', writeLimit, validateBody(postBody), async (request, response) => {
-  const post = await createPost(userId(request), (request.body as { content: string }).content);
+router.post('/', writeLimit, async (request, response) => {
+  if (request.is('multipart/form-data')) {
+    const { content, file } = await parseMediaForm(request);
+    if (!file) throw new AppError(400, 'FILE_REQUIRED', 'Choose a photo or PDF file.');
+    try {
+      if (content.length > POST_CONTENT_LIMIT)
+        throw new AppError(400, 'VALIDATION_ERROR', 'Post text is too long.');
+      const media = await saveMedia(file, userId(request), 'post');
+      try {
+        const post = await createPost(userId(request), content, media);
+        sendSuccess(response, { post }, 'Post published', 201);
+      } catch (error) {
+        await deleteMedia(media.fileId);
+        throw error;
+      }
+    } finally {
+      await removeTempFile(file);
+    }
+    return;
+  }
+  const parsed = postBody.safeParse(request.body);
+  if (!parsed.success)
+    throw new AppError(400, 'VALIDATION_ERROR', 'Invalid request. Check the required fields.');
+  const post = await createPost(userId(request), parsed.data.content);
   sendSuccess(response, { post }, 'Post published', 201);
 });
 router.get('/:postId', validateParams(postParams), async (request, response) => {
@@ -85,11 +112,27 @@ router.delete('/:postId', writeLimit, validateParams(postParams), async (request
   await deletePost(userId(request), postId(request));
   sendSuccess(response, {}, 'Post deleted');
 });
-router.put('/:postId/like', writeLimit, validateParams(postParams), async (request, response) => {
-  sendSuccess(response, await toggleLike(userId(request), postId(request), true), 'Post liked');
-});
+router.put(
+  '/:postId/like',
+  writeLimit,
+  validateParams(postParams),
+  validateBody(reactionBody),
+  async (request, response) => {
+    sendSuccess(
+      response,
+      await toggleLike(userId(request), postId(request), true, request.body.reaction),
+      'Post reacted to'
+    );
+  }
+);
 router.delete('/:postId/like', writeLimit, validateParams(postParams), async (request, response) => {
   sendSuccess(response, await toggleLike(userId(request), postId(request), false), 'Post unliked');
+});
+router.put('/:postId/follow', writeLimit, validateParams(postParams), async (request, response) => {
+  sendSuccess(response, await toggleFollow(userId(request), postId(request), true), 'Author followed');
+});
+router.delete('/:postId/follow', writeLimit, validateParams(postParams), async (request, response) => {
+  sendSuccess(response, await toggleFollow(userId(request), postId(request), false), 'Author unfollowed');
 });
 router.put('/:postId/bookmark', writeLimit, validateParams(postParams), async (request, response) => {
   sendSuccess(response, await toggleBookmark(userId(request), postId(request), true), 'Post saved');

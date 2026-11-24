@@ -119,6 +119,7 @@ export async function activityDtos(records: ActivityRecord[], viewerId: string, 
     const linkedResource = resourceByActivity.get(id(record._id));
     if (
       record.commandType === 'resource' &&
+      'fileId' in (parsed.data as Record<string, unknown>) &&
       (linkedResource?.status !== 'published' || !cleanFiles.has(id(linkedResource.fileId)))
     )
       return [];
@@ -209,7 +210,7 @@ export async function submitCommand(
     if (expiresAt && Date.parse(expiresAt) <= Date.now())
       throw new AppError(400, 'COMMAND_PAYLOAD_INVALID', 'Expiration must be in the future.');
   }
-  if (definition.id === 'resource')
+  if (definition.id === 'resource' && 'fileId' in (parsed.data as Record<string, unknown>))
     throw new AppError(
       503,
       'RESOURCE_STORAGE_UNAVAILABLE',

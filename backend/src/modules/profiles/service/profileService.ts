@@ -8,6 +8,7 @@ import { getOwnSkills } from '../../skills/service/skillService.js';
 import { getOwnExperiences, getOwnEducations } from './historyService.js';
 import { listCertifications, listProjects } from './portfolioService.js';
 import ProfileUsernameAlias from '../model/ProfileUsernameAlias.js';
+import { ratingSummary } from './profileRatingService.js';
 import type { OnboardingIdentityInput } from '../../onboarding/validation/onboardingSchemas.js';
 
 export function splitFullName(fullName: string) {
@@ -28,6 +29,7 @@ export function toProfileDto(record: ProfileRecord & { _id: Types.ObjectId }): P
     ...(record.city ? { city: record.city } : {}),
     ...(record.bio ? { bio: record.bio } : {}),
     ...(record.avatarUrl ? { avatarUrl: record.avatarUrl } : {}),
+    ...(record.coverUrl ? { coverUrl: record.coverUrl } : {}),
     ...(record.professionalStatus ? { professionalStatus: record.professionalStatus } : {}),
     ...(record.githubUrl ? { githubUrl: record.githubUrl } : {}),
     ...(record.portfolioUrl ? { portfolioUrl: record.portfolioUrl } : {}),
@@ -142,15 +144,16 @@ export async function getPublicProfile(username: string): Promise<PublicProfileR
     owner.onboardingStatus !== 'COMPLETED'
   )
     throw new AppError(404, 'PROFILE_NOT_FOUND', 'Profile not found.');
-  const [skills, experiences, education, certifications, projects] = await Promise.all([
+  const [skills, experiences, education, certifications, projects, rating] = await Promise.all([
     getOwnSkills(record.userId.toString()),
     getOwnExperiences(record.userId.toString()),
     getOwnEducations(record.userId.toString()),
     listCertifications(record.userId.toString()),
-    listProjects(record.userId.toString())
+    listProjects(record.userId.toString()),
+    ratingSummary(record.userId.toString())
   ]);
-  const { id: _id, visibility: _visibility, avatarUrl: _avatarUrl, ...profile } = toProfileDto(record);
-  return { profile, skills, experiences, education, certifications, projects };
+  const { id: _id, visibility: _visibility, ...profile } = toProfileDto(record);
+  return { profile, skills, experiences, education, certifications, projects, rating };
 }
 
 export async function checkUsername(userId: string, username: string) {

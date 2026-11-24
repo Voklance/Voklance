@@ -1,4 +1,4 @@
-import { COMMENT_CONTENT_LIMIT, POST_CONTENT_LIMIT } from '@voklance/shared';
+import { COMMENT_CONTENT_LIMIT, POST_CONTENT_LIMIT, POST_REACTIONS } from '@voklance/shared';
 import { z } from 'zod';
 
 const id = z.string().regex(/^[0-9a-f]{24}$/i);
@@ -11,6 +11,10 @@ export const postBody = z
   })
   .strict();
 export const postPatch = z.object({ content: z.string().trim().min(1).max(POST_CONTENT_LIMIT) }).strict();
+export const reactionBody = z
+  .object({ reaction: z.enum(POST_REACTIONS).default('like') })
+  .strict()
+  .default({ reaction: 'like' });
 export const commentBody = z
   .object({ content: z.string().trim().min(1).max(COMMENT_CONTENT_LIMIT) })
   .strict();

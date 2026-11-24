@@ -14,6 +14,13 @@ import { useFlash } from '@/components/shared/FlashMessages';
 export default function ApplicationLayout({ user }: { user: AuthUser }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const location = useLocation();
+  const isProfilePage =
+    location.pathname.startsWith('/app/profile') || location.pathname.startsWith('/app/professionals/');
+  const isProfileView =
+    location.pathname === '/app/profile' || location.pathname.startsWith('/app/professionals/');
+  const isCommunityChat =
+    location.pathname === '/app/community-chat' ||
+    /^\/app\/communities\/[^/]+\/chat$/.test(location.pathname);
   const signOut = useSignOut();
   const { showFlash } = useFlash();
   useMessagingLifecycle(user.id);
@@ -73,7 +80,13 @@ export default function ApplicationLayout({ user }: { user: AuthUser }) {
       <a className="skip-link" href="#main-content">
         Skip to main content
       </a>
-      <TopNavigation user={user} menuOpen={menuOpen} onMenuToggle={() => setMenuOpen((open) => !open)} />
+      <TopNavigation
+        user={user}
+        menuOpen={menuOpen}
+        onMenuToggle={() => setMenuOpen((open) => !open)}
+        onSignOut={() => signOut.mutate()}
+        signingOut={signOut.isPending}
+      />
       {menuOpen && (
         <button
           type="button"
@@ -83,7 +96,9 @@ export default function ApplicationLayout({ user }: { user: AuthUser }) {
           tabIndex={-1}
         />
       )}
-      <div className="dashboard-layout">
+      <div
+        className={`dashboard-layout${isProfilePage ? ' dashboard-layout--profile' : ''}${isProfileView ? ' dashboard-layout--profile-view' : ''}${isCommunityChat ? ' dashboard-layout--community-chat' : ''}`}
+      >
         <SideNavigation
           signingOut={signOut.isPending}
           onSignOut={() => signOut.mutate()}
@@ -98,7 +113,7 @@ export default function ApplicationLayout({ user }: { user: AuthUser }) {
           )}
           <Outlet />
         </main>
-        <ProfileSidebar user={user} />
+        {!isProfilePage && !isCommunityChat && <ProfileSidebar user={user} />}
       </div>
     </div>
   );

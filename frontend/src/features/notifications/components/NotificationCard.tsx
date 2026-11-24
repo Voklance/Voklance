@@ -6,7 +6,7 @@ export function notificationTarget(item: NotificationDto) {
     case 'connection_request':
       return '/app/network';
     case 'referral':
-      return '/app/referrals';
+      return '/app/community-chat';
     case 'event':
       return `/app/events/${item.entityId}`;
     case 'community':

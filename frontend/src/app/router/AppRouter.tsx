@@ -7,6 +7,8 @@ import LoadingState from '@/components/shared/LoadingState';
 import CommunityDiscoveryPage from '@/features/communities/pages/CommunityDiscoveryPage';
 import CreateCommunityPage from '@/features/communities/pages/CreateCommunityPage';
 import CommunityDetailPage from '@/features/communities/pages/CommunityDetailPage';
+import CommunityChatPage from '@/features/communities/pages/CommunityChatPage';
+import CommunityInboxPage from '@/features/communities/pages/CommunityInboxPage';
 import CommunityMembersPage from '@/features/communities/pages/CommunityMembersPage';
 import CommunityRequestsPage from '@/features/communities/pages/CommunityRequestsPage';
 import CommunitySettingsPage from '@/features/communities/pages/CommunitySettingsPage';
@@ -24,14 +26,11 @@ import OnboardingPage from '@/features/onboarding/pages/OnboardingPage';
 import MyProfilePage from '@/features/profiles/pages/MyProfilePage';
 import EditProfilePage from '@/features/profiles/pages/EditProfilePage';
 import PublicProfilePage from '@/features/profiles/pages/PublicProfilePage';
-import MyReferralsPage from '@/features/referrals/pages/MyReferralsPage';
 import ReferralOpportunityPage from '@/features/referrals/pages/ReferralOpportunityPage';
 import ReferralNeedPage from '@/features/referrals/pages/ReferralNeedPage';
-import EventsPage from '@/features/events/pages/EventsPage';
 import EventDetailPage from '@/features/events/pages/EventDetailPage';
 import EventEditPage from '@/features/events/pages/EventEditPage';
 import CommunityResourcesPage from '@/features/resources/pages/CommunityResourcesPage';
-import MyResourcesPage from '@/features/resources/pages/MyResourcesPage';
 import ResourceDetailPage from '@/features/resources/pages/ResourceDetailPage';
 import MyNetworkPage from '@/features/connections/pages/MyNetworkPage';
 import ProfessionalDiscoveryPage from '@/features/connections/pages/ProfessionalDiscoveryPage';
@@ -145,19 +144,18 @@ export default function AppRouter() {
         <Route path="saved" element={<SavedItemsPage />} />
         <Route path="activity" element={<ActivityPage />} />
         <Route path="communities" element={<CommunityDiscoveryPage />} />
+        <Route path="community-chat" element={<CommunityInboxPage />} />
         <Route path="communities/create" element={<CreateCommunityPage />} />
         <Route path="communities/:slug" element={<CommunityDetailPage />} />
+        <Route path="communities/:slug/chat" element={<CommunityChatPage />} />
         <Route path="communities/:slug/resources" element={<CommunityResourcesPage />} />
         <Route path="communities/:slug/members" element={<CommunityMembersPage />} />
         <Route path="communities/:slug/requests" element={<CommunityRequestsPage />} />
         <Route path="communities/:slug/settings" element={<CommunitySettingsPage />} />
-        <Route path="referrals" element={<MyReferralsPage />} />
         <Route path="referrals/opportunities/:opportunityId" element={<ReferralOpportunityPage />} />
         <Route path="referrals/needs/:needId" element={<ReferralNeedPage />} />
-        <Route path="events" element={<EventsPage />} />
         <Route path="events/:eventId" element={<EventDetailPage />} />
         <Route path="events/:eventId/edit" element={<EventEditPage />} />
-        <Route path="resources" element={<MyResourcesPage />} />
         <Route path="resources/:resourceId" element={<ResourceDetailPage />} />
         <Route path="profile" element={<MyProfilePage />} />
         <Route path="profile/edit" element={<EditProfilePage />} />

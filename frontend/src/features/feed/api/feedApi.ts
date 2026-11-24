@@ -1,4 +1,11 @@
-import type { ApiSuccess, CommentPage, FeedComment, FeedPage, FeedPost } from '@voklance/shared';
+import type {
+  ApiSuccess,
+  CommentPage,
+  FeedComment,
+  FeedPage,
+  FeedPost,
+  PostReaction
+} from '@voklance/shared';
 import { apiClient } from '@/lib/apiClient';
 
 async function data<T>(request: Promise<{ data: ApiSuccess<T> }>): Promise<T> {
@@ -12,14 +19,26 @@ export const feedApi = {
     data<FeedPage>(
       apiClient.get('/users/me/bookmarks', { params: { limit: 10, ...(cursor ? { cursor } : {}) } })
     ),
-  create: (content: string) =>
-    data<{ post: FeedPost }>(apiClient.post('/posts', { content, visibility: 'PROFESSIONALS' })),
+  create: (input: string | { content: string; file: File }) => {
+    if (typeof input === 'string')
+      return data<{ post: FeedPost }>(
+        apiClient.post('/posts', { content: input, visibility: 'PROFESSIONALS' })
+      );
+    const form = new FormData();
+    form.append('content', input.content);
+    form.append('file', input.file);
+    return data<{ post: FeedPost }>(apiClient.post('/posts', form, { timeout: 60_000 }));
+  },
   edit: (id: string, content: string) =>
     data<{ post: FeedPost }>(apiClient.patch(`/posts/${id}`, { content })),
   remove: (id: string) => data<Record<string, never>>(apiClient.delete(`/posts/${id}`)),
-  like: (id: string, desired: boolean) =>
-    data<{ likedByMe: boolean; likeCount: number }>(
-      desired ? apiClient.put(`/posts/${id}/like`) : apiClient.delete(`/posts/${id}/like`)
+  like: (id: string, desired: boolean, reaction: PostReaction = 'like') =>
+    data<{ likedByMe: boolean; reactionByMe: PostReaction | null; likeCount: number }>(
+      desired ? apiClient.put(`/posts/${id}/like`, { reaction }) : apiClient.delete(`/posts/${id}/like`)
+    ),
+  follow: (id: string, desired: boolean) =>
+    data<{ followingAuthor: boolean }>(
+      desired ? apiClient.put(`/posts/${id}/follow`) : apiClient.delete(`/posts/${id}/follow`)
     ),
   bookmark: (id: string, desired: boolean) =>
     data<{ bookmarkedByMe: boolean }>(

@@ -24,7 +24,7 @@ The temporary `/api/health` and `/api/auth/*` aliases remain. Sign-up and login 
 | `PATCH /api/v1/profiles/me`                        | `{ "username": "ada", "fullName": "Ada Dev", "headline": "Engineer", "country": "India" }`; later updates may use any nonempty subset | `{ "profile": { "id": "...", "username": "ada", "fullName": "Ada Dev", "headline": "Engineer", "country": "India" } }`                          | `400 VALIDATION_ERROR`, `400 PROFILE_INCOMPLETE`, `409 USERNAME_TAKEN`, `409 PROFILE_CONFLICT` |
 | `GET /api/v1/profiles/check-username?username=ada` | Username starts with a letter and uses 3–30 lowercase-normalized letters, digits, `.`, `_`, or `-`                                    | `{ "username": "ada", "available": true }`                                                                                                      | `400 VALIDATION_ERROR`                                                                         |
 
-The first profile save needs `username`, `fullName`, `headline`, and `country` because the existing model requires them. Other editable fields are `bio`, `city`, `visibility` (`PRIVATE` or `PUBLIC`), HTTPS `githubUrl`, `portfolioUrl`, `websiteUrl`, and `professionalStatus` (`STUDENT`, `WORKING_PROFESSIONAL`, `FREELANCER`, `FOUNDER`, `RECRUITER`, `EDUCATOR`, or `OTHER`). `avatarUrl` cannot be written through this API until an approved upload integration exists. Availability checks are informational; the unique username index decides whether a save succeeds. A user's own username is reported as available. DTOs omit account and ownership fields.
+The first profile save needs `username`, `fullName`, `headline`, and `country` because the existing model requires them. Other editable fields are `bio`, `city`, `visibility` (`PRIVATE` or `PUBLIC`), HTTPS `githubUrl`, `portfolioUrl`, `websiteUrl`, and `professionalStatus` (`STUDENT`, `WORKING_PROFESSIONAL`, `FREELANCER`, `FOUNDER`, `RECRUITER`, `EDUCATOR`, or `OTHER`). Profile images cannot be set through the profile patch API. Use `POST /api/v1/profiles/me/avatar` or `POST /api/v1/profiles/me/cover` with a multipart `file` (JPEG, PNG, or WebP, up to 8 MB), and the matching `DELETE` endpoint to remove it. Availability checks are informational; the unique username index decides whether a save succeeds. A user's own username is reported as available. DTOs omit account and ownership fields.
 
 ## Skills and interests
 
@@ -94,23 +94,25 @@ When verification is enabled, profile, catalog, selection, history, and onboardi
 
 ## Professional feed and saved posts
 
-All endpoints below require the existing session, active account, current email-verification policy, and completed onboarding. Writes use a 30-action/15-minute per-user limiter. Posts are text only, 1–3,000 trimmed characters. Comments are 1–1,000 trimmed characters. The only accepted post visibility value is `PROFESSIONALS`; omitted visibility has the same behavior. Attachment IDs and extra fields are rejected until approved storage exists.
+All endpoints below require the existing session, active account, current email-verification policy, and completed onboarding. Writes use a 30-action/15-minute per-user limiter. Text-only posts contain 1–3,000 trimmed characters. A multipart post may contain an optional caption and one JPEG, PNG, or WebP photo (up to 8 MB) or one PDF (up to 15 MB). Files are stored in MongoDB GridFS and checked by content signature. Comments are 1–1,000 trimmed characters. The only accepted post visibility value for JSON posts is `PROFESSIONALS`; omitted visibility has the same behavior. Arbitrary attachment IDs and extra fields are rejected.
 
-| Method          | Path                                                 | Purpose                                                       |
-| --------------- | ---------------------------------------------------- | ------------------------------------------------------------- |
-| `GET`           | `/api/v1/posts?limit=10&cursor=...`                  | Chronological feed, maximum limit 50                          |
-| `POST`          | `/api/v1/posts`                                      | Publish `{ "content": "...", "visibility": "PROFESSIONALS" }` |
-| `PATCH`         | `/api/v1/posts/:postId`                              | Edit own post with `{ "content": "..." }`                     |
-| `DELETE`        | `/api/v1/posts/:postId`                              | Soft-delete own post                                          |
-| `PUT`, `DELETE` | `/api/v1/posts/:postId/like`                         | Idempotent like and unlike                                    |
-| `PUT`, `DELETE` | `/api/v1/posts/:postId/bookmark`                     | Idempotent private save and remove                            |
-| `GET`           | `/api/v1/users/me/bookmarks?limit=10&cursor=...`     | Private saved posts                                           |
-| `GET`           | `/api/v1/posts/:postId/comments?limit=10&cursor=...` | Flat comments                                                 |
-| `POST`          | `/api/v1/posts/:postId/comments`                     | Add `{ "content": "..." }`                                    |
-| `PATCH`         | `/api/v1/posts/:postId/comments/:commentId`          | Edit own comment                                              |
-| `DELETE`        | `/api/v1/posts/:postId/comments/:commentId`          | Soft-delete own comment                                       |
+| Method          | Path                                                 | Purpose                                             |
+| --------------- | ---------------------------------------------------- | --------------------------------------------------- |
+| `GET`           | `/api/v1/posts?limit=10&cursor=...`                  | Chronological feed, maximum limit 50                |
+| `POST`          | `/api/v1/posts`                                      | Publish JSON text or multipart `content` and `file` |
+| `PATCH`         | `/api/v1/posts/:postId`                              | Edit own post with `{ "content": "..." }`           |
+| `DELETE`        | `/api/v1/posts/:postId`                              | Soft-delete own post                                |
+| `PUT`, `DELETE` | `/api/v1/posts/:postId/like`                         | Idempotent like and unlike                          |
+| `PUT`, `DELETE` | `/api/v1/posts/:postId/bookmark`                     | Idempotent private save and remove                  |
+| `GET`           | `/api/v1/users/me/bookmarks?limit=10&cursor=...`     | Private saved posts                                 |
+| `GET`           | `/api/v1/posts/:postId/comments?limit=10&cursor=...` | Flat comments                                       |
+| `POST`          | `/api/v1/posts/:postId/comments`                     | Add `{ "content": "..." }`                          |
+| `PATCH`         | `/api/v1/posts/:postId/comments/:commentId`          | Edit own comment                                    |
+| `DELETE`        | `/api/v1/posts/:postId/comments/:commentId`          | Soft-delete own comment                             |
 
 Lists return `{ "items": [], "nextCursor": null, "hasMore": false }` inside the standard success envelope. A post DTO contains ID, text, safe author name/username/headline, timestamps, like/comment counts, and current viewer's liked/bookmarked/owned flags. It excludes email, user IDs, session data, and profile internals. A private or missing author profile has a non-linked author name. Invalid IDs or cursors return `400 VALIDATION_ERROR`; unavailable or non-owned posts/comments return 404. Deleted posts disappear from feed and saved posts, and their interactions return 404. Bookmarks are never publicly listed.
+
+An attached file appears as `attachment: { id, kind, url, filename, mimeType, size }`. `GET /api/v1/media/:fileId` serves post attachments to signed-in readers while the post and author remain available. PDFs download as attachments. Public profile photos are readable without a session; private profile photos require the owner's session. Replacing or removing an avatar and deleting a post remove its stored file.
 
 ## Professional communities
 

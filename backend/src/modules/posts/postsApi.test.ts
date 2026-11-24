@@ -7,6 +7,8 @@ import User from '../users/model/User.js';
 import Profile from '../profiles/model/Profile.js';
 import Post from './model/Post.js';
 import PostLike from './model/PostLike.js';
+import PostFollow from './model/PostFollow.js';
+import ProfessionalExperience from '../profiles/model/ProfessionalExperience.js';
 import PostBookmark from './model/PostBookmark.js';
 import PostComment from './model/PostComment.js';
 
@@ -18,6 +20,10 @@ let secondId = '';
 let postId = '';
 let commentId = '';
 let counter = 0;
+const tinyPng = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL/nwAAAABJRU5ErkJggg==',
+  'base64'
+);
 
 async function signup(name: string) {
   const response = await request(app)
@@ -42,6 +48,7 @@ beforeAll(async () => {
     Profile.init(),
     Post.init(),
     PostLike.init(),
+    PostFollow.init(),
     PostBookmark.init(),
     PostComment.init()
   ]);
@@ -56,6 +63,7 @@ beforeAll(async () => {
     username: 'first-author',
     fullName: 'First Author',
     headline: 'Engineer',
+    avatarUrl: 'https://example.test/first-author.jpg',
     country: 'India',
     visibility: 'PUBLIC'
   });
@@ -100,7 +108,12 @@ describe('professional feed API', () => {
     expect(created.body.data.post).toMatchObject({
       content: 'Professional update',
       ownedByMe: true,
-      author: { name: 'First Author', username: 'first-author', headline: 'Engineer' }
+      author: {
+        name: 'First Author',
+        username: 'first-author',
+        headline: 'Engineer',
+        avatarUrl: 'https://example.test/first-author.jpg'
+      }
     });
     expect(created.body.data.post.author).not.toHaveProperty('email');
     const second = await request(app)
@@ -155,6 +168,125 @@ describe('professional feed API', () => {
       (await request(app).get('/api/v1/users/me/bookmarks').set('Cookie', firstCookie)).body.data.items
     ).toHaveLength(0);
     expect((await request(app).delete(bookmark).set('Cookie', secondCookie)).status).toBe(200);
+  });
+
+  it('uploads photos and PDFs to posts and serves them only to signed-in readers', async () => {
+    const photo = await request(app)
+      .post('/api/v1/posts')
+      .set('Cookie', firstCookie)
+      .field('content', 'A photo from work')
+      .attach('file', tinyPng, 'work.png');
+    expect(photo.status).toBe(201);
+    expect(photo.body.data.post.attachment).toMatchObject({
+      kind: 'image',
+      mimeType: 'image/png',
+      filename: 'work.png'
+    });
+    const photoUrl = photo.body.data.post.attachment.url;
+    expect((await request(app).get(photoUrl).set('Cookie', secondCookie)).status).toBe(200);
+    expect((await request(app).get(photoUrl)).status).toBe(404);
+    const pdf = await request(app)
+      .post('/api/v1/posts')
+      .set('Cookie', firstCookie)
+      .field('content', '')
+      .attach('file', Buffer.from('%PDF-1.4\n1 0 obj\n<<>>\nendobj\n%%EOF'), 'notes.pdf');
+    expect(pdf.status).toBe(201);
+    expect(pdf.body.data.post.attachment).toMatchObject({ kind: 'document', mimeType: 'application/pdf' });
+    expect(
+      (await request(app).get(pdf.body.data.post.attachment.url).set('Cookie', secondCookie)).headers[
+        'content-disposition'
+      ]
+    ).toContain('attachment');
+    const bad = await request(app)
+      .post('/api/v1/posts')
+      .set('Cookie', firstCookie)
+      .field('content', 'Bad file')
+      .attach('file', Buffer.from('<script>bad</script>'), 'bad.pdf');
+    expect(bad.status).toBe(400);
+    await request(app).delete(`/api/v1/posts/${photo.body.data.post.id}`).set('Cookie', firstCookie);
+    expect((await request(app).get(photoUrl).set('Cookie', secondCookie)).status).toBe(404);
+  });
+
+  it('uploads and removes a profile photo', async () => {
+    const uploaded = await request(app)
+      .post('/api/v1/profiles/me/avatar')
+      .set('Cookie', firstCookie)
+      .attach('file', tinyPng, 'avatar.png');
+    expect(uploaded.status).toBe(200);
+    const avatarUrl = uploaded.body.data.avatarUrl;
+    expect(avatarUrl).toMatch(/^\/api\/v1\/media\/[0-9a-f]{24}$/);
+    expect((await request(app).get(avatarUrl)).status).toBe(200);
+    expect((await request(app).get('/api/v1/profiles/public/first-author')).body.data.profile.avatarUrl).toBe(
+      avatarUrl
+    );
+    await Profile.updateOne({ userId: firstId }, { $set: { visibility: 'PRIVATE' } });
+    expect((await request(app).get(avatarUrl)).status).toBe(404);
+    expect((await request(app).get(avatarUrl).set('Cookie', firstCookie)).status).toBe(200);
+    await Profile.updateOne({ userId: firstId }, { $set: { visibility: 'PUBLIC' } });
+    expect((await request(app).delete('/api/v1/profiles/me/avatar').set('Cookie', firstCookie)).status).toBe(
+      200
+    );
+    expect((await request(app).get(avatarUrl)).status).toBe(404);
+  });
+
+  it('uploads and removes a profile cover image', async () => {
+    const uploaded = await request(app)
+      .post('/api/v1/profiles/me/cover')
+      .set('Cookie', firstCookie)
+      .attach('file', tinyPng, 'cover.png');
+    expect(uploaded.status).toBe(200);
+    const coverUrl = uploaded.body.data.coverUrl;
+    expect((await request(app).get('/api/v1/profiles/public/first-author')).body.data.profile.coverUrl).toBe(
+      coverUrl
+    );
+    expect((await request(app).get(coverUrl)).status).toBe(200);
+    expect((await request(app).delete('/api/v1/profiles/me/cover').set('Cookie', firstCookie)).status).toBe(
+      200
+    );
+    expect((await request(app).get(coverUrl)).status).toBe(404);
+  });
+
+  it('stores reactions, follow state, and an experience title when the headline is empty', async () => {
+    const like = `/api/v1/posts/${postId}/like`;
+    const follow = `/api/v1/posts/${postId}/follow`;
+    expect(
+      (await request(app).put(like).set('Cookie', secondCookie).send({ reaction: 'love' })).body.data
+        .reactionByMe
+    ).toBe('love');
+    expect(
+      (await request(app).put(like).set('Cookie', secondCookie).send({ reaction: 'insightful' })).body.data
+        .likeCount
+    ).toBe(1);
+    expect(
+      (await request(app).put(like).set('Cookie', secondCookie).send({ reaction: 'invalid' })).status
+    ).toBe(400);
+    let view = await request(app).get(`/api/v1/posts/${postId}`).set('Cookie', secondCookie);
+    expect(view.body.data.post).toMatchObject({
+      reactionByMe: 'insightful',
+      reactionCounts: { insightful: 1 }
+    });
+    expect((await request(app).put(follow).set('Cookie', firstCookie)).status).toBe(400);
+    expect((await request(app).put(follow).set('Cookie', secondCookie)).status).toBe(200);
+    expect((await request(app).put(follow).set('Cookie', secondCookie)).status).toBe(200);
+    view = await request(app).get(`/api/v1/posts/${postId}`).set('Cookie', secondCookie);
+    expect(view.body.data.post.followingAuthor).toBe(true);
+    await Profile.updateOne({ userId: firstId }, { $set: { headline: '' } });
+    await ProfessionalExperience.create({
+      userId: firstId,
+      jobTitle: 'React Developer',
+      companyName: 'Example',
+      startDate: new Date('2024-01-01'),
+      isCurrent: true
+    });
+    view = await request(app).get(`/api/v1/posts/${postId}`).set('Cookie', secondCookie);
+    expect(view.body.data.post.author.headline).toBe('React Developer');
+    expect((await request(app).delete(follow).set('Cookie', secondCookie)).status).toBe(200);
+    expect(
+      (await request(app).get(`/api/v1/posts/${postId}`).set('Cookie', secondCookie)).body.data.post
+        .followingAuthor
+    ).toBe(false);
+    await request(app).delete(like).set('Cookie', secondCookie);
+    await Profile.updateOne({ userId: firstId }, { $set: { headline: 'Engineer' } });
   });
 
   it('creates, paginates, edits and deletes comments with ownership', async () => {

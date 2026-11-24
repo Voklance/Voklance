@@ -28,7 +28,8 @@ vi.mock('@/features/profiles/api/profileApi', () => ({
     interests: vi.fn(),
     experiences: vi.fn(),
     educations: vi.fn(),
-    public: vi.fn()
+    public: vi.fn(),
+    ownRating: vi.fn()
   }
 }));
 vi.mock('@/features/feed/api/feedApi', () => ({ feedApi: { feed: vi.fn(), saved: vi.fn() } }));
@@ -68,6 +69,7 @@ beforeEach(() => {
   vi.mocked(emailVerificationApi.resend).mockResolvedValue({ sent: true });
   vi.mocked(emailVerificationApi.verify).mockResolvedValue({ verified: true });
   vi.mocked(profileApi.own).mockResolvedValue({ profile: null });
+  vi.mocked(profileApi.ownRating).mockResolvedValue({ average: null, count: 0 });
   vi.mocked(feedApi.feed).mockResolvedValue({ items: [], nextCursor: null, hasMore: false });
   vi.mocked(communityApi.mine).mockResolvedValue({ items: [], nextCursor: null, hasMore: false });
   window.history.replaceState(null, '', '/');

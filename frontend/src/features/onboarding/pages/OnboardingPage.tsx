@@ -104,8 +104,9 @@ function OnboardingWizard({
   const busy = useRef(false);
   const heading = useRef<HTMLHeadingElement>(null);
   const debouncedSkillSearch = useDebounced(skillSearch);
+  const debouncedInterestSearch = useDebounced(interestSearch);
   const skillCatalog = useSkillsCatalog(debouncedSkillSearch, step === 3);
-  const interestCatalog = useInterestsCatalog(useDebounced(interestSearch), step === 5);
+  const interestCatalog = useInterestsCatalog(debouncedInterestSearch, step === 5);
   const history = {
     experiences: onboarding.experiences.data?.experiences || snapshot.experiences,
     education: onboarding.educations.data?.educations || snapshot.education
@@ -325,6 +326,7 @@ function OnboardingWizard({
             <CatalogSelector
               kind="interest"
               search={interestSearch}
+              loadedSearch={debouncedInterestSearch}
               onSearch={setInterestSearch}
               selected={interests}
               onChange={setInterests}
@@ -390,60 +392,158 @@ function Review({
           Complete these sections first: {missing.join(', ')}.
         </div>
       )}
-      <ReviewSection title="Basic profile" step={1} onEdit={onEdit}>
-        {snapshot.profile ? (
-          <>
-            <strong>{snapshot.profile.fullName}</strong>
-            {snapshot.profile.headline && <span>{snapshot.profile.headline}</span>}
-          </>
-        ) : (
-          <p>Not saved yet.</p>
-        )}
-      </ReviewSection>
-      <ReviewSection title="Professional status" step={2} onEdit={onEdit}>
-        <p>
-          {snapshot.profile?.professionalStatus
-            ? professionalStatusLabels[snapshot.profile.professionalStatus]
-            : 'Not saved yet.'}
-        </p>
-      </ReviewSection>
-      <ReviewSection title="Skills" step={3} onEdit={onEdit}>
-        <p>{snapshot.skills.map((item) => item.name).join(', ') || 'No skills saved yet.'}</p>
-      </ReviewSection>
-      <ReviewSection title="Experience & education" step={4} onEdit={onEdit}>
-        <p>
-          {snapshot.experiences.map((item) => `${item.jobTitle} at ${item.companyName}`).join(', ') ||
-            'No experience added.'}
-        </p>
-        <p>{snapshot.education.map((item) => item.institution).join(', ') || 'No education added.'}</p>
-      </ReviewSection>
-      <ReviewSection title="Interests" step={5} onEdit={onEdit}>
-        <p>{snapshot.interests.map((item) => item.name).join(', ') || 'No interests saved yet.'}</p>
-      </ReviewSection>
+      <div className="review-panel">
+        <ReviewSection title="Basic profile" description="Your personal information" step={1} onEdit={onEdit}>
+          {snapshot.profile ? (
+            <div className="review-profile-value">
+              <strong>{snapshot.profile.fullName}</strong>
+              {snapshot.profile.headline && <span>{snapshot.profile.headline}</span>}
+            </div>
+          ) : (
+            <p className="review-empty">Not saved yet.</p>
+          )}
+        </ReviewSection>
+        <ReviewSection
+          title="Professional status"
+          description="Your current work status"
+          step={2}
+          onEdit={onEdit}
+        >
+          <p>
+            {snapshot.profile?.professionalStatus
+              ? professionalStatusLabels[snapshot.profile.professionalStatus]
+              : 'Not saved yet.'}
+          </p>
+        </ReviewSection>
+        <ReviewSection title="Skills" description="Your key skills and expertise" step={3} onEdit={onEdit}>
+          {snapshot.skills.length ? (
+            <ul className="review-chips">
+              {snapshot.skills.map((item) => (
+                <li key={item.id}>{item.name}</li>
+              ))}
+            </ul>
+          ) : (
+            <p className="review-empty">No skills saved yet.</p>
+          )}
+        </ReviewSection>
+        <ReviewSection
+          title="Experience & education"
+          description="Your work and educational background"
+          step={4}
+          onEdit={onEdit}
+        >
+          <div className="review-history-values">
+            {snapshot.experiences.length ? (
+              snapshot.experiences.map((item) => (
+                <div className="review-history-value" key={item.id}>
+                  <ReviewIcon step={2} />
+                  <span>
+                    {item.jobTitle} at {item.companyName}
+                  </span>
+                </div>
+              ))
+            ) : (
+              <p className="review-empty">No experience added.</p>
+            )}
+            {snapshot.education.length ? (
+              snapshot.education.map((item) => (
+                <div className="review-history-value" key={item.id}>
+                  <ReviewIcon step={4} />
+                  <span>{item.institution}</span>
+                </div>
+              ))
+            ) : (
+              <p className="review-empty">No education added.</p>
+            )}
+          </div>
+        </ReviewSection>
+        <ReviewSection title="Interests" description="Topics you’re interested in" step={5} onEdit={onEdit}>
+          {snapshot.interests.length ? (
+            <ul className="review-chips">
+              {snapshot.interests.map((item) => (
+                <li key={item.id}>{item.name}</li>
+              ))}
+            </ul>
+          ) : (
+            <p className="review-empty">No interests saved yet.</p>
+          )}
+        </ReviewSection>
+      </div>
     </div>
   );
 }
 
 function ReviewSection({
   title,
+  description,
   step,
   onEdit,
   children
 }: {
   title: string;
+  description: string;
   step: OnboardingStep;
   onEdit: (step: OnboardingStep) => void;
   children: ReactNode;
 }) {
   return (
     <section className="review-section">
-      <div>
+      <span className="review-icon-tile">
+        <ReviewIcon step={step} />
+      </span>
+      <div className="review-label">
         <h2>{title}</h2>
-        <button type="button" onClick={() => onEdit(step)}>
-          Edit {title.toLowerCase()}
-        </button>
+        <p>{description}</p>
       </div>
+      <span className="review-divider" aria-hidden="true" />
       <div className="review-details">{children}</div>
+      <button
+        type="button"
+        className="review-edit"
+        aria-label={`Edit ${title.toLowerCase()}`}
+        onClick={() => onEdit(step)}
+      >
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path
+            d="m4 20 4.1-.9L19 8.2 15.8 5 4.9 15.9 4 20Z"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinejoin="round"
+          />
+          <path d="m13.8 7 3.2 3.2" stroke="currentColor" strokeWidth="1.8" />
+        </svg>
+        <span>Edit</span>
+      </button>
     </section>
+  );
+}
+
+function ReviewIcon({ step }: { step: OnboardingStep }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      {step === 1 && (
+        <>
+          <circle cx="12" cy="7" r="3.5" />
+          <path d="M4.5 21v-2.2a7.5 7.5 0 0 1 15 0V21" />
+        </>
+      )}
+      {step === 2 && (
+        <>
+          <rect x="2.5" y="7" width="19" height="14" rx="2" />
+          <path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M2.5 12h19M10 12v2h4v-2" />
+        </>
+      )}
+      {step === 3 && <path d="m8 6-6 6 6 6M16 6l6 6-6 6M14 3l-4 18" />}
+      {step === 4 && (
+        <>
+          <path d="m1.5 9 10.5-5 10.5 5L12 14 1.5 9ZM5 11v6l7 3 7-3v-6M22.5 9v8" />
+        </>
+      )}
+      {step === 5 && (
+        <>
+          <path d="m12 2 9 5-9 5-9-5 9-5ZM3 11l9 5 9-5M3 15l9 5 9-5" />
+        </>
+      )}
+    </svg>
   );
 }

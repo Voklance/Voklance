@@ -172,6 +172,7 @@ export interface ProfessionalProfile {
   city?: string;
   bio?: string;
   avatarUrl?: string;
+  coverUrl?: string;
   professionalStatus?: ProfessionalStatus;
   githubUrl?: string | null;
   portfolioUrl?: string | null;
@@ -181,12 +182,22 @@ export interface ProfessionalProfile {
 }
 
 export interface PublicProfileResponseData {
-  profile: Omit<ProfessionalProfile, 'id' | 'visibility' | 'avatarUrl'>;
+  profile: Omit<ProfessionalProfile, 'id' | 'visibility'>;
+  rating?: ProfileRatingSummary;
   skills: CatalogItem[];
   experiences: ProfessionalExperience[];
   education: Education[];
   certifications?: ProfileCertification[];
   projects?: ProfileProject[];
+}
+
+export interface ProfileRatingSummary {
+  average: number | null;
+  count: number;
+}
+
+export interface ProfileRatingData extends ProfileRatingSummary {
+  myRating: number | null;
 }
 
 export interface CatalogItem {
@@ -303,17 +314,34 @@ export interface PostAuthor {
   name: string;
   username: string | null;
   headline: string | null;
+  avatarUrl?: string;
 }
+
+export interface PostAttachment {
+  id: string;
+  kind: 'image' | 'document';
+  url: string;
+  filename: string;
+  mimeType: string;
+  size: number;
+}
+
+export const POST_REACTIONS = ['like', 'love', 'celebrate', 'insightful'] as const;
+export type PostReaction = (typeof POST_REACTIONS)[number];
 
 export interface FeedPost {
   id: string;
   content: string;
   author: PostAuthor;
+  attachment?: PostAttachment;
   createdAt: string;
   updatedAt: string;
   likeCount: number;
   commentCount: number;
   likedByMe: boolean;
+  reactionByMe?: PostReaction | null;
+  reactionCounts?: Partial<Record<PostReaction, number>>;
+  followingAuthor?: boolean;
   bookmarkedByMe: boolean;
   ownedByMe: boolean;
 }

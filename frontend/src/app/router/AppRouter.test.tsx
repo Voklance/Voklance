@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import type { AuthUser } from '@voklance/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { authApi } from '@/features/auth/api/authApi';
@@ -9,6 +9,7 @@ import { currentUserKey } from '@/features/auth/hooks/useCurrentUser';
 import { profileApi } from '@/features/profiles/api/profileApi';
 import { feedApi } from '@/features/feed/api/feedApi';
 import { communityApi } from '@/features/communities/api/communityApi';
+import { commandApi } from '@/features/community-commands/api/commandApi';
 import { connectionApi } from '@/features/connections/api/connectionApi';
 import { messagingApi } from '@/features/messaging/api/messagingApi';
 import { notificationApi } from '@/features/notifications/api/notificationApi';
@@ -84,12 +85,18 @@ vi.mock('@/features/profiles/api/profileApi', () => ({
     interests: vi.fn(),
     experiences: vi.fn(),
     educations: vi.fn(),
-    public: vi.fn()
+    public: vi.fn(),
+    ownRating: vi.fn(),
+    rating: vi.fn(),
+    saveRating: vi.fn()
   }
 }));
 vi.mock('@/features/feed/api/feedApi', () => ({ feedApi: { feed: vi.fn(), saved: vi.fn() } }));
 vi.mock('@/features/communities/api/communityApi', () => ({
-  communityApi: { discover: vi.fn(), mine: vi.fn() }
+  communityApi: { discover: vi.fn(), mine: vi.fn(), detail: vi.fn() }
+}));
+vi.mock('@/features/community-commands/api/commandApi', () => ({
+  commandApi: { commands: vi.fn(), activities: vi.fn(), submit: vi.fn(), remove: vi.fn() }
 }));
 vi.mock('@/features/connections/api/connectionApi', () => ({
   connectionApi: { counts: vi.fn(), mine: vi.fn(), professionals: vi.fn(), requests: vi.fn() }
@@ -130,6 +137,7 @@ beforeEach(() => {
   vi.mocked(profileApi.interests).mockResolvedValue({ interests: [] });
   vi.mocked(profileApi.experiences).mockResolvedValue({ experiences: [] });
   vi.mocked(profileApi.educations).mockResolvedValue({ educations: [] });
+  vi.mocked(profileApi.ownRating).mockResolvedValue({ average: null, count: 0 });
   vi.mocked(feedApi.feed).mockResolvedValue({ items: [], nextCursor: null, hasMore: false });
   vi.mocked(feedApi.saved).mockResolvedValue({ items: [], nextCursor: null, hasMore: false });
   vi.mocked(bookmarkApi.saved).mockResolvedValue({ items: [], nextCursor: null, hasMore: false });
@@ -144,6 +152,8 @@ beforeEach(() => {
   });
   vi.mocked(communityApi.discover).mockResolvedValue({ items: [], nextCursor: null, hasMore: false });
   vi.mocked(communityApi.mine).mockResolvedValue({ items: [], nextCursor: null, hasMore: false });
+  vi.mocked(commandApi.commands).mockResolvedValue({ commands: [] });
+  vi.mocked(commandApi.activities).mockResolvedValue({ items: [], nextCursor: null, hasMore: false });
   vi.mocked(connectionApi.counts).mockResolvedValue({ counts: { connections: 0, incoming: 0, sent: 0 } });
   vi.mocked(connectionApi.mine).mockResolvedValue({
     items: [],
@@ -169,6 +179,28 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('application access matrix', () => {
+  it.each(['/app/referrals', '/app/events', '/app/resources'])(
+    'does not expose the retired %s page',
+    async (path) => {
+      renderRoute(path, completed);
+      expect(await screen.findByText('The page you requested does not exist.')).toBeTruthy();
+    }
+  );
+  it('omits retired sections from the main navigation', async () => {
+    renderRoute('/app', completed);
+    const navigation = await screen.findByRole('navigation', { name: 'Main navigation' });
+    for (const label of ['My referrals', 'Events', 'My resources']) {
+      expect(within(navigation).queryByRole('link', { name: label })).toBeNull();
+    }
+  });
+  it('opens community chat from the left navigation without the account sidebar', async () => {
+    renderRoute('/app', completed);
+    const navigation = screen.getByRole('navigation', { name: 'Main navigation' });
+    fireEvent.click(within(navigation).getByRole('link', { name: 'Community chat' }));
+    expect(await screen.findByRole('heading', { name: 'Communities' })).toBeTruthy();
+    expect(screen.getByRole('complementary', { name: 'Your community conversations' })).toBeTruthy();
+    expect(screen.queryByRole('complementary', { name: 'Your account and communities' })).toBeNull();
+  });
   it('opens the compact navigation, closes with Escape, and exposes a skip link', async () => {
     renderRoute('/app', completed);
     const toggle = await screen.findByRole('button', { name: 'Open menu' });
@@ -179,6 +211,195 @@ describe('application access matrix', () => {
     expect(screen.getByRole('button', { name: 'Close menu' }).getAttribute('aria-expanded')).toBe('true');
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(screen.getByRole('button', { name: 'Open menu' }).getAttribute('aria-expanded')).toBe('false');
+  });
+  it('shows the header shortcuts and opens the account menu', async () => {
+    renderRoute('/app', completed);
+    const quickNav = await screen.findByRole('navigation', { name: 'Quick navigation' });
+    expect(screen.getByRole('link', { name: 'Voklance home' })).toBeTruthy();
+    expect(within(quickNav).getByRole('link', { name: 'Home' }).getAttribute('href')).toBe('/app');
+    expect(within(quickNav).getByRole('link', { name: 'Chat' }).getAttribute('href')).toBe('/app/messages');
+    expect(within(quickNav).getByRole('link', { name: 'Profile' }).getAttribute('href')).toBe('/app/profile');
+    fireEvent.click(screen.getByRole('button', { name: 'Account menu for Sam Engineer' }));
+    const account = screen.getByRole('group', { name: 'Account options' });
+    expect(within(account).getByRole('link', { name: 'View profile' })).toBeTruthy();
+    expect(within(account).getByRole('link', { name: 'My Network' }).getAttribute('href')).toBe(
+      '/app/network'
+    );
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('group', { name: 'Account options' })).toBeNull();
+  });
+  it('shows the saved profile, experience, skill logos, and stars in the sidebar card', async () => {
+    vi.mocked(profileApi.own).mockResolvedValue({
+      profile: {
+        id: 'c'.repeat(24),
+        username: 'sam.engineer',
+        fullName: 'Sam Engineer',
+        headline: 'React Developer',
+        country: 'India'
+      }
+    });
+    vi.mocked(profileApi.experiences).mockResolvedValue({
+      experiences: [
+        {
+          id: 'd'.repeat(24),
+          jobTitle: 'Software Engineer',
+          companyName: 'Acme',
+          startDate: '2024-01-01',
+          isCurrent: true
+        }
+      ]
+    });
+    vi.mocked(profileApi.skills).mockResolvedValue({
+      skills: [
+        { id: 'e'.repeat(24), name: 'React.js', slug: 'react-js', category: 'Frontend' },
+        { id: 'f'.repeat(24), name: 'AWS', slug: 'aws', category: 'Cloud' }
+      ]
+    });
+    renderRoute('/app', completed);
+    const card = await screen.findByRole('region', { name: 'Your profile summary' });
+    expect(await within(card).findByText('React Developer')).toBeTruthy();
+    expect(within(card).getByText('Acme')).toBeTruthy();
+    expect(within(card).getByText(/Years Experience/)).toBeTruthy();
+    expect(within(card).getByText('React.js')).toBeTruthy();
+    expect(within(card).getByText('AWS')).toBeTruthy();
+    expect(card.querySelector('.devicon-react-original.colored')).toBeTruthy();
+    expect(card.querySelector('.devicon-amazonwebservices-plain.colored')).toBeTruthy();
+    expect(card.querySelectorAll('.profile-rating-star')).toHaveLength(5);
+    expect(within(card).getByText('No ratings yet')).toBeTruthy();
+    expect(within(card).queryByText('Profile strength')).toBeNull();
+    expect(within(card).queryByRole('link', { name: 'View profile' })).toBeNull();
+    expect(within(card).getByRole('link', { name: 'Edit skills' }).getAttribute('href')).toBe(
+      '/app/profile/edit'
+    );
+  });
+  it('expands extra sidebar skills and collapses them again', async () => {
+    vi.mocked(profileApi.skills).mockResolvedValue({
+      skills: Array.from({ length: 10 }, (_, index) => ({
+        id: String(index + 1).padStart(24, '0'),
+        name: `Skill ${index + 1}`,
+        slug: `skill-${index + 1}`,
+        category: 'Engineering'
+      }))
+    });
+    renderRoute('/app', completed);
+    const card = await screen.findByRole('region', { name: 'Your profile summary' });
+    const more = await within(card).findByRole('button', { name: '+2' });
+    expect(within(card).queryByText('Skill 10')).toBeNull();
+    fireEvent.click(more);
+    expect(within(card).getByText('Skill 10')).toBeTruthy();
+    const less = within(card).getByRole('button', { name: 'Show less' });
+    expect(less.getAttribute('aria-expanded')).toBe('true');
+    fireEvent.click(less);
+    expect(within(card).queryByText('Skill 10')).toBeNull();
+  });
+  it('opens the community chat route without the account sidebar', async () => {
+    vi.mocked(communityApi.detail).mockResolvedValue({
+      community: {
+        id: 'c'.repeat(24),
+        slug: 'react-professionals',
+        name: 'React Professionals',
+        description: null,
+        category: 'software-development',
+        tags: [],
+        visibility: 'PRIVATE',
+        status: 'ACTIVE',
+        memberCount: 2,
+        membershipStatus: null,
+        myRole: null,
+        createdAt: '2026-11-15T00:00:00.000Z',
+        rules: null,
+        owner: null,
+        permissions: {
+          viewMembers: false,
+          reviewRequests: false,
+          editDetails: false,
+          manageRoles: false,
+          removeMembers: false,
+          transferOwnership: false,
+          archive: false
+        }
+      }
+    });
+    renderRoute('/app/communities/react-professionals/chat', completed);
+    expect(await screen.findByText('Join this community to view its conversation.')).toBeTruthy();
+    expect(screen.queryByRole('complementary', { name: 'Your account and communities' })).toBeNull();
+  });
+  it('opens a community chat window from the right panel and closes it', async () => {
+    vi.mocked(commandApi.commands).mockResolvedValue({
+      commands: [
+        {
+          id: 'discussion',
+          command: '/discussion',
+          label: 'Discussion',
+          description: 'Start a discussion.',
+          iconId: 'discussion',
+          category: 'knowledge',
+          enabled: true,
+          payloadVersion: 1,
+          displayType: 'discussion'
+        }
+      ]
+    });
+    const summary = {
+      id: 'c'.repeat(24),
+      slug: 'react-professionals',
+      name: 'React Professionals',
+      description: null,
+      category: 'software-development' as const,
+      tags: [],
+      visibility: 'PUBLIC' as const,
+      status: 'ACTIVE' as const,
+      memberCount: 2,
+      membershipStatus: 'ACTIVE' as const,
+      myRole: 'MEMBER' as const,
+      createdAt: '2026-11-15T00:00:00.000Z'
+    };
+    vi.mocked(communityApi.mine).mockResolvedValue({ items: [summary], nextCursor: null, hasMore: false });
+    vi.mocked(communityApi.detail).mockResolvedValue({
+      community: {
+        ...summary,
+        rules: null,
+        owner: null,
+        permissions: {
+          viewMembers: true,
+          reviewRequests: false,
+          editDetails: false,
+          manageRoles: false,
+          removeMembers: false,
+          transferOwnership: false,
+          archive: false
+        }
+      }
+    });
+    renderRoute('/app', completed);
+    const trigger = await screen.findByRole('button', { name: 'Open React Professionals chat' });
+    fireEvent.click(trigger);
+    const widget = await screen.findByRole('region', { name: 'Community chat window' });
+    expect(await within(widget).findByRole('heading', { name: 'React Professionals' })).toBeTruthy();
+    expect(screen.queryByRole('region', { name: 'Your profile summary' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Your communities' })).toBeNull();
+    expect(within(widget).getByRole('link', { name: 'Open full community chat' }).getAttribute('href')).toBe(
+      '/app/communities/react-professionals/chat'
+    );
+    expect(screen.getByRole('heading', { name: 'Professional feed' })).toBeTruthy();
+    fireEvent.click(await within(widget).findByRole('button', { name: 'Browse commands' }));
+    fireEvent.keyDown(within(widget).getByRole('combobox', { name: 'Choose a structured action' }), {
+      key: 'Escape'
+    });
+    expect(screen.getByRole('region', { name: 'Community chat window' })).toBeTruthy();
+    fireEvent.click(within(widget).getByRole('button', { name: 'Start selected command' }));
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+    expect(screen.getByRole('region', { name: 'Community chat window' })).toBeTruthy();
+    fireEvent.click(within(widget).getByRole('button', { name: 'Close community chat' }));
+    expect(screen.queryByRole('region', { name: 'Community chat window' })).toBeNull();
+    expect(screen.getByRole('region', { name: 'Your profile summary' })).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'Your communities' })).toBeTruthy();
+  });
+  it('hides the account sidebar while viewing a profile', async () => {
+    renderRoute('/app/profile', completed);
+    expect(await screen.findByRole('heading', { name: 'Your profile' })).toBeTruthy();
+    expect(screen.queryByRole('complementary', { name: 'Your account and communities' })).toBeNull();
+    expect(document.querySelector('.dashboard-layout--profile')).toBeTruthy();
   });
   it.each([
     ['/app', null, 'Welcome back.'],
